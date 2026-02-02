@@ -239,5 +239,6 @@
     <None Include="..\..\Cache\lua-5.4.8\src\Makefile">
       <Filter>소스 파일\lua</Filter>
     </None>
+    <None Include=".gitignore" />
   </ItemGroup>
 </Project>

@@ -26,6 +26,33 @@ int     g_bufH = 0;
     if (lua_isstring(L, -1)) var = lua_tostring(L, -1); \
     lua_pop(L, 1);
 
+
+void InitLuaEngine() {
+    // 1. 기존 상태가 있다면 종료
+    if (g_L) {
+        unregisterLuaFunctions(g_L); // 등록 해제
+        lua_close(g_L);
+    }
+
+    // 2. 새로운 Lua 상태 생성
+    g_L = luaL_newstate();
+    luaL_openlibs(g_L);
+
+    // 3. API 등록 (sys, is, g, res 등)
+    register_sys(g_L, "sys");
+    register_input(g_L, "is");
+    register_draw(g_L, "g");
+    register_res(g_L, "res");
+
+    // 4. 스크립트 로드
+    if (luaL_dofile(g_L, "main.lua") != LUA_OK) {
+        printf("[LUA ERROR] %s\n", lua_tostring(g_L, -1));
+        lua_pop(g_L, 1);
+        return;
+    }
+    printf("Lua Engine Initialized / Reloaded.\n");
+}
+
 void drawing() {
     ULONGLONG now = GetTickCount64();
     double dt = double(now - lastTick);
@@ -142,6 +169,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         else {
             lua_pop(g_L, 1);
         }
+        if (wParam == VK_F5) {
+#ifdef _DEBUG
+            printf("Reloading Script...\n");
+            InitLuaEngine(); // 엔진을 껐다 켜서 모든 루아 상태 초기화
+
+            lua_getglobal(g_L, "init");
+            if (lua_isfunction(g_L, -1)) {
+                if (lua_pcall(g_L, 0, 0, 0) != LUA_OK) {
+                    printf("[INIT ERROR] %s\n", lua_tostring(g_L, -1));
+                    lua_pop(g_L, 1);
+                }
+            }
+            else {
+                lua_pop(g_L, 1);
+            }
+#endif
+        }
         break;
 
     case WM_KEYUP:
@@ -166,81 +210,61 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdSh
     GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr);
+    g_pfc = new PrivateFontCollection();
 
 #ifdef _DEBUG
     if (AllocConsole()) {
         FILE* fp;
-        freopen_s(&fp, "CONOUT$", "w", stdout); // printf를 콘솔로 연결
-        freopen_s(&fp, "CONOUT$", "w", stderr); // 에러 메시지 연결
+        freopen_s(&fp, "CONOUT$", "w", stdout);
+        freopen_s(&fp, "CONOUT$", "w", stderr);
         printf("Debug Console Opened\n");
     }
 #endif
 
-	// LUA 초기화
-    g_L = luaL_newstate(); // Lua 엔진 생성
-    luaL_openlibs(g_L);               // Lua 기본 함수들(print, math 등) 로드
+    // 1. 루아 엔진 최초 실행
+    InitLuaEngine();
 
-    if (luaL_dofile(g_L, "main.lua") != LUA_OK) {
-        const char* error = lua_tostring(g_L, -1);
-        OutputDebugStringA("--- LUA ERROR ---\n");
-        OutputDebugStringA(error);
-        OutputDebugStringA("\n-----------------\n");
-        lua_pop(g_L, 1);
-    }
-
+    // 2. 루아로부터 받아온 설정값으로 윈도우 생성 (g_L이 준비되었으므로 안전)
     std::string myTitleString = "Default Title";
-
     LUA_GET_INT(g_L, "screenWidth", gDrawW);
     LUA_GET_INT(g_L, "screenHeight", gDrawH);
     LUA_GET_STR(g_L, "windowTitle", myTitleString);
+    STR_TO_WCHAR(myTitleString, titleW);
 
-	STR_TO_WCHAR(myTitleString, titleW);
-
-    // 윈도우 클래스 등록
-    WNDCLASS wc = {};
+    // 윈도우 클래스 등록 및 생성
+    WNDCLASS wc = { 0 };
     wc.lpfnWndProc = WndProc;
     wc.hInstance = hInstance;
     wc.lpszClassName = L"LayeredImageWindow";
     RegisterClass(&wc);
 
-    g_pfc = new PrivateFontCollection();
-
-    // 위치 결정
-    int screenW = GetSystemMetrics(SM_CXSCREEN);
-    int screenH = GetSystemMetrics(SM_CYSCREEN);
-    HWND hwnd = CreateWindowEx(
-        WS_EX_LAYERED | WS_EX_TOPMOST,
-        wc.lpszClassName, titleW,
-        WS_POPUP,
-        200, 200, gDrawW, gDrawH,
-        nullptr, nullptr, hInstance, nullptr);
-    g_hwnd = hwnd;
+    g_hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOPMOST, wc.lpszClassName, titleW,
+        WS_POPUP, 200, 200, gDrawW, gDrawH, nullptr, nullptr, hInstance, nullptr);
 
     lastTick = GetTickCount64();
+    ShowWindow(g_hwnd, nCmdShow);
+    SetTimer(g_hwnd, 1, 1, nullptr);
 
-    ShowWindow(hwnd, nCmdShow);
-    SetTimer(hwnd, 1, 1, nullptr); // 최소 주기
 
-
-    register_sys(g_L, "sys");
-    register_input(g_L, "is");
-    register_draw(g_L, "g");
-    register_res(g_L, "res");
-
-	lua_getglobal(g_L, "init");
+    lua_getglobal(g_L, "init");
     if (lua_isfunction(g_L, -1)) {
-        lua_pcall(g_L, 0, 0, 0);
+        if (lua_pcall(g_L, 0, 0, 0) != LUA_OK) {
+            printf("[INIT ERROR] %s\n", lua_tostring(g_L, -1));
+            lua_pop(g_L, 1);
+        }
     }
     else {
         lua_pop(g_L, 1);
     }
+    // 3. 메시지 루프
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
 
-    unregisterLuaFunctions(g_L);
+    // 종료 처리
+    if (g_L) lua_close(g_L);
     GdiplusShutdown(gdiplusToken);
     return 0;
 }
