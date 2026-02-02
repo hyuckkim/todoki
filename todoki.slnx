@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="todoki.vcxproj" Id="47aa7798-2172-466a-a37b-767d68fec6ec" />
+</Solution>

@@ -1,0 +1,243 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="소스 파일">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="헤더 파일">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="리소스 파일">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="소스 파일\lua">
+      <UniqueIdentifier>{0962bd42-b955-466c-9637-f9a495e09d6c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="헤더 파일\lua">
+      <UniqueIdentifier>{441323cb-e938-406f-b92b-70a04e69e6cf}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lapi.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lauxlib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lbaselib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lcode.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lcorolib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lctype.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\ldblib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\ldebug.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\ldo.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\ldump.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lfunc.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lgc.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\linit.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\liolib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\llex.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lmathlib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lmem.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\loadlib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lobject.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lopcodes.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\loslib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lparser.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lstate.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lstring.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lstrlib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\ltable.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\ltablib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\ltm.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lundump.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lutf8lib.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lvm.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\Cache\lua-5.4.8\src\lzio.c">
+      <Filter>소스 파일\lua</Filter>
+    </ClCompile>
+    <ClCompile Include="lua_res.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="lua_g.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="lua_input.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="lua_sys.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="todoki.rc">
+      <Filter>리소스 파일</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="small.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
+    <Image Include="todoki.ico">
+      <Filter>리소스 파일</Filter>
+    </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lparser.h">
+      <Filter>소스 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lua.hpp">
+      <Filter>소스 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lapi.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lauxlib.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lcode.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lctype.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\ldebug.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\ldo.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lfunc.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lgc.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\ljumptab.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\llex.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\llimits.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lmem.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lobject.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lopcodes.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lopnames.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lprefix.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lstate.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lstring.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\ltable.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\ltm.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lua.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\luaconf.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lualib.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lundump.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lvm.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Cache\lua-5.4.8\src\lzio.h">
+      <Filter>헤더 파일\lua</Filter>
+    </ClInclude>
+    <ClInclude Include="lua_engine.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\Cache\lua-5.4.8\src\Makefile">
+      <Filter>소스 파일\lua</Filter>
+    </None>
+  </ItemGroup>
+</Project>
