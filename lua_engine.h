@@ -1,15 +1,17 @@
 #pragma once
 #include <windows.h>
-#include <lua.hpp>
+#include <sol/sol.hpp>
 #include <gdiplus.h>
-#include <map>
 #include <string>
 #include <vector>
-#include <shlwapi.h>
+#include <map>
 
-#pragma comment(lib, "Shlwapi.lib")
-#pragma comment (lib, "Gdiplus.lib")
+#pragma comment(lib, "Gdiplus.lib")
 using namespace Gdiplus;
+
+extern Graphics* g_currentGraphics;
+extern HWND g_hwnd;
+extern sol::state lua;
 
 extern Graphics* g_currentGraphics;
 extern HWND g_hwnd;
@@ -21,32 +23,26 @@ extern std::vector<Image*> g_imageTable;
 extern std::vector<Font*> g_fontTable;
 extern std::map<std::string, int> g_pathCache;
 
+inline std::wstring to_wstring(const std::string& s) {
+    if (s.empty()) return L"";
 
-inline std::vector<wchar_t> to_wstring(const char* s) {
-    int len = MultiByteToWideChar(CP_UTF8, 0, s, -1, NULL, 0);
-    if (len <= 0) return std::vector<wchar_t>();
+    // 필요한 크기 계산
+    int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, NULL, 0);
+    if (len <= 0) return L"";
 
-    std::vector<wchar_t> buf(len);
-    MultiByteToWideChar(CP_UTF8, 0, s, -1, buf.data(), len);
+    // wstring 공간 확보
+    std::wstring buf(len, L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &buf[0], len);
+
+    // MultiByteToWideChar는 널 문자를 포함하므로, 끝의 \0를 제거해주는 게 좋습니다.
+    if (!buf.empty() && buf.back() == L'\0') {
+        buf.pop_back();
+    }
+
     return buf;
 }
 
-inline std::vector<wchar_t> to_wstring(const std::string& s) {
-    return to_wstring(s.c_str());
-}
-
-// wchar_t*를 !생성함!
-#define STR_TO_WCHAR(_s, _w) \
-    auto _w##_vector = to_wstring(_s); \
-    const wchar_t* _w = _w##_vector.data();
-
-#define REG_METHOD(L, name, func) \
-    lua_pushcfunction(L, func); \
-    lua_setfield(L, -2, name);
-
-void register_res(lua_State* L, const char* name);
-void register_draw(lua_State* L, const char* name);
-void register_input(lua_State* L, const char* name);
-void register_sys(lua_State* L, const char* name);
-
-void unregisterLuaFunctions(lua_State* L);
+void register_draw(sol::state& lua, const char* name);
+void register_input(sol::state& lua, const char* name);
+void register_sys(sol::state& lua, const char* name);
+void register_res(sol::state& lua, const char* name);

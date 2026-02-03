@@ -1,6 +1,6 @@
 ﻿#include "lua_engine.h"
 
-lua_State* g_L;
+sol::state lua;
 ULONGLONG lastTick = 0;
 Graphics* g_currentGraphics = nullptr;
 PrivateFontCollection* g_pfc = nullptr;
@@ -14,43 +14,45 @@ HBITMAP g_hBmpOld = nullptr;
 int     g_bufW = 0;
 int     g_bufH = 0;
 
-// 정수 가져오기 매크로: int
-#define LUA_GET_INT(L, name, var) \
-    lua_getglobal(L, name); \
-    if (lua_isnumber(L, -1)) var = (int)lua_tonumber(L, -1); \
-    lua_pop(L, 1);
-
-// 문자열 가져오기 매크로: std::string
-#define LUA_GET_STR(L, name, var) \
-    lua_getglobal(L, name); \
-    if (lua_isstring(L, -1)) var = lua_tostring(L, -1); \
-    lua_pop(L, 1);
-
+#define CALL_LUA_FUNC(lua_state, func_name, ...) \
+    { \
+        sol::protected_function f = lua_state[func_name]; \
+        if (f.valid()) { \
+            auto result = f(__VA_ARGS__); \
+            if (!result.valid()) { \
+                sol::error err = result; \
+                printf("[LUA ERROR] %s: %s\n", func_name, err.what()); \
+            } \
+        } \
+    }
 
 void InitLuaEngine() {
-    // 1. 기존 상태가 있다면 종료
-    if (g_L) {
-        unregisterLuaFunctions(g_L); // 등록 해제
-        lua_close(g_L);
-    }
+    // 1. sol::state는 새로 생성하거나 collect_garbage를 통해 정리 가능
+    // 기존 g_L을 수동으로 닫던 복잡한 과정이 줄어듭니다.
+    lua = sol::state();
+    lua.open_libraries(
+        sol::lib::base,
+        sol::lib::package,
+        sol::lib::table,
+        sol::lib::string,
+        sol::lib::math,
+        sol::lib::debug
+    );
 
-    // 2. 새로운 Lua 상태 생성
-    g_L = luaL_newstate();
-    luaL_openlibs(g_L);
+    // 2. API 등록 (sol2 스타일로 변경된 함수들 호출)
+    register_sys(lua, "sys");
+    register_input(lua, "is");
+    register_draw(lua, "g");
+    register_res(lua, "res");
 
-    // 3. API 등록 (sys, is, g, res 등)
-    register_sys(g_L, "sys");
-    register_input(g_L, "is");
-    register_draw(g_L, "g");
-    register_res(g_L, "res");
-
-    // 4. 스크립트 로드
-    if (luaL_dofile(g_L, "main.lua") != LUA_OK) {
-        printf("[LUA ERROR] %s\n", lua_tostring(g_L, -1));
-        lua_pop(g_L, 1);
+    // 3. 스크립트 로드 (sol::load_result 사용으로 안전하게)
+    auto load_result = lua.script_file("main.lua", sol::script_pass_on_error);
+    if (!load_result.valid()) {
+        sol::error err = load_result;
+        printf("[LUA ERROR] %s\n", err.what());
         return;
     }
-    printf("Lua Engine Initialized / Reloaded.\n");
+    printf("Lua Engine Initialized / Reloaded via sol2.\n");
 }
 
 void drawing() {
@@ -106,24 +108,16 @@ void drawing() {
     // 2. DIBSection에 GDI+ 렌더링 시작
     Graphics g(g_hdcMem);
     g.SetCompositingMode(CompositingModeSourceOver);
-    g.SetSmoothingMode(SmoothingModeAntiAlias); // 깔끔한 선을 위해 추가
+    g.SetSmoothingMode(SmoothingModeAntiAlias);
     g.Clear(Color(0, 0, 0, 0));
 
-	// 3. Lua Update / Draw 호출
     g_currentGraphics = &g;
-    lua_getglobal(g_L, "update");
-    if (lua_isfunction(g_L, -1)) {
-        lua_pushnumber(g_L, dt); // dt 전달
-        lua_pcall(g_L, 1, 0, 0);
-    }
-    else { lua_pop(g_L, 1); }
 
-    // 4. Lua Draw 호출
-    lua_getglobal(g_L, "draw");
-    if (lua_isfunction(g_L, -1)) {
-        lua_pcall(g_L, 0, 0, 0);
-    }
-    else { lua_pop(g_L, 1); }
+    // 3. Lua Update / Draw 호출 (sol2의 마법)
+    // pcall과 에러 처리를 한 줄로 끝냅니다.
+	CALL_LUA_FUNC(lua, "Update", dt);
+	CALL_LUA_FUNC(lua, "Draw");
+
     g_currentGraphics = nullptr;
 
     // 5. 레이어드 윈도우 갱신
@@ -158,47 +152,38 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
-
     case WM_KEYDOWN:
-        // 루아의 OnKeyDown(vkCode) 함수 호출
-        lua_getglobal(g_L, "OnKeyDown");
-        if (lua_isfunction(g_L, -1)) {
-            lua_pushinteger(g_L, (int)wParam);
-            lua_pcall(g_L, 1, 0, 0);
-        }
-        else {
-            lua_pop(g_L, 1);
-        }
+		CALL_LUA_FUNC(lua, "OnKeyDown", (int)wParam);
+
         if (wParam == VK_F5) {
 #ifdef _DEBUG
             printf("Reloading Script...\n");
-            InitLuaEngine(); // 엔진을 껐다 켜서 모든 루아 상태 초기화
-
-            lua_getglobal(g_L, "init");
-            if (lua_isfunction(g_L, -1)) {
-                if (lua_pcall(g_L, 0, 0, 0) != LUA_OK) {
-                    printf("[INIT ERROR] %s\n", lua_tostring(g_L, -1));
-                    lua_pop(g_L, 1);
-                }
-            }
-            else {
-                lua_pop(g_L, 1);
-            }
+            InitLuaEngine();
+            CALL_LUA_FUNC(lua, "Init");
 #endif
         }
         break;
 
     case WM_KEYUP:
-        // 루아의 OnKeyUp(vkCode) 함수 호출
-        lua_getglobal(g_L, "OnKeyUp");
-        if (lua_isfunction(g_L, -1)) {
-            lua_pushinteger(g_L, (int)wParam);
-            lua_pcall(g_L, 1, 0, 0);
-        }
-        else {
-            lua_pop(g_L, 1);
-        }
+		CALL_LUA_FUNC(lua, "OnKeyUp", (int)wParam);
         break;
+
+    case WM_LBUTTONDOWN:
+        CALL_LUA_FUNC(lua, "OnMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        break;
+
+    case WM_LBUTTONUP:
+        CALL_LUA_FUNC(lua, "OnMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        break;
+
+    case WM_RBUTTONDOWN:
+        CALL_LUA_FUNC(lua, "OnRightMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        break;
+
+    case WM_RBUTTONUP:
+        CALL_LUA_FUNC(lua, "OnRightMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        break;
+
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
     }
@@ -220,16 +205,13 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdSh
         printf("Debug Console Opened\n");
     }
 #endif
-
-    // 1. 루아 엔진 최초 실행
     InitLuaEngine();
 
     // 2. 루아로부터 받아온 설정값으로 윈도우 생성 (g_L이 준비되었으므로 안전)
-    std::string myTitleString = "Default Title";
-    LUA_GET_INT(g_L, "screenWidth", gDrawW);
-    LUA_GET_INT(g_L, "screenHeight", gDrawH);
-    LUA_GET_STR(g_L, "windowTitle", myTitleString);
-    STR_TO_WCHAR(myTitleString, titleW);
+    gDrawW = lua.get_or("ScreenWidth", 800);
+    gDrawH = lua.get_or("ScreenHeight", 600);
+    std::string title = lua.get_or<std::string>("WindowTitle", "Fantasy Wagon");
+    std::wstring titleW = to_wstring(title);
 
     // 윈도우 클래스 등록 및 생성
     WNDCLASS wc = { 0 };
@@ -238,33 +220,20 @@ int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdSh
     wc.lpszClassName = L"LayeredImageWindow";
     RegisterClass(&wc);
 
-    g_hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOPMOST, wc.lpszClassName, titleW,
+    g_hwnd = CreateWindowEx(WS_EX_LAYERED | WS_EX_TOPMOST, wc.lpszClassName, titleW.c_str(),
         WS_POPUP, 200, 200, gDrawW, gDrawH, nullptr, nullptr, hInstance, nullptr);
 
     lastTick = GetTickCount64();
     ShowWindow(g_hwnd, nCmdShow);
     SetTimer(g_hwnd, 1, 1, nullptr);
 
-
-    lua_getglobal(g_L, "init");
-    if (lua_isfunction(g_L, -1)) {
-        if (lua_pcall(g_L, 0, 0, 0) != LUA_OK) {
-            printf("[INIT ERROR] %s\n", lua_tostring(g_L, -1));
-            lua_pop(g_L, 1);
-        }
-    }
-    else {
-        lua_pop(g_L, 1);
-    }
-    // 3. 메시지 루프
+	CALL_LUA_FUNC(lua, "Init");
     MSG msg;
     while (GetMessage(&msg, nullptr, 0, 0)) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
 
-    // 종료 처리
-    if (g_L) lua_close(g_L);
     GdiplusShutdown(gdiplusToken);
     return 0;
 }

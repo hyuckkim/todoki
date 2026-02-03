@@ -1,80 +1,82 @@
 #include "lua_engine.h"
+// 이제 luaL_check... 시리즈는 필요 없습니다. sol2가 인자 개수와 타입을 자동으로 검증합니다.
 
-int l_drawRect(lua_State* L) {
-    float x = (float)luaL_checknumber(L, 1);
-    float y = (float)luaL_checknumber(L, 2);
-    float w = (float)luaL_checknumber(L, 3);
-    float h = (float)luaL_checknumber(L, 4);
+void register_draw(sol::state& lua, const char* name) {
+    // 1. 테이블 생성 (기존 lua_newtable + lua_setglobal 대용)
+    auto g = lua.create_named_table(name);
 
-    if (g_currentGraphics) {
-        SolidBrush brush(g_currentColor);
-        g_currentGraphics->FillRectangle(&brush, x, y, w, h);
-    }
-    return 0;
-}
+    // 2. Rect 그리기
+    g["rect"] = [](float x, float y, float w, float h) {
+        if (g_currentGraphics) {
+            SolidBrush brush(g_currentColor);
+            g_currentGraphics->FillRectangle(&brush, x, y, w, h);
+        }
+    };
 
-int l_setFillStyle(lua_State* L) {
-    int r = (int)luaL_checkinteger(L, 1);
-    int g = (int)luaL_checkinteger(L, 2);
-    int b = (int)luaL_checkinteger(L, 3);
-    int a = (int)luaL_optinteger(L, 4, 255); // 알파는 선택
+    // 3. 색상 설정 (알파값 선택적 처리)
+    // sol::optional을 쓰면 루아에서 인자를 안 보냈을 때 기본값을 줄 수 있습니다.
+    g["color"] = [](int r, int g, int b, sol::optional<int> a) {
+        g_currentColor = Color(a.value_or(255), r, g, b);
+    };
 
-    g_currentColor = Color(a, r, g, b); // GDI+ 색상 갱신
-    return 0;
-}
+    // 4. 텍스트 그리기
+    g["text"] = [](int fontId, std::string text, float x, float y) {
+        if (fontId >= 0 && fontId < (int)g_fontTable.size() && g_currentGraphics) {
+            // 기존 STR_TO_WCHAR 매크로 대신 더 안전한 변환 사용 가능
+            std::wstring wText = to_wstring(text);
+            Font* font = g_fontTable[fontId];
+            SolidBrush brush(g_currentColor);
+            g_currentGraphics->DrawString(wText.c_str(), -1, font, PointF(x, y), &brush);
+        }
+    };
+    g["fontSize"] = [](int fontId, std::string text) -> std::pair<float, float> {
+        if (fontId >= 0 && fontId < (int)g_fontTable.size()) {
+            std::wstring wText = to_wstring(text);
+            Font* font = g_fontTable[fontId];
 
-int l_drawText(lua_State* L) {
-    int fontId = (int)luaL_checkinteger(L, 1);
-    const char* text = luaL_checkstring(L, 2);
-    float x = (float)luaL_checknumber(L, 3);
-    float y = (float)luaL_checknumber(L, 4);
+            // 실제 화면 Graphics 대신, 측정용 임시 비트맵 Graphics를 사용 (일관성 유지)
+            static Bitmap dummy(1, 1);
+            static Graphics* measurer = Graphics::FromImage(&dummy);
 
-    if (fontId >= 0 && fontId < (int)g_fontTable.size() && g_currentGraphics) {
-        STR_TO_WCHAR(text, wText);
-        Font* font = g_fontTable[fontId];
-        SolidBrush brush(g_currentColor);
+            // 여백(Overhang) 없는 정확한 측정을 위한 포맷
+            static StringFormat format(StringFormat::GenericTypographic());
 
-        g_currentGraphics->DrawString(wText, -1, font, PointF(x, y), &brush);
-    }
-    return 0;
-}
+            RectF boundRect;
+            measurer->MeasureString(wText.c_str(), -1, font, PointF(0, 0), &format, &boundRect);
 
-int l_drawImage(lua_State* L) {
-    int id = (int)luaL_checkinteger(L, 1);
+            return { boundRect.Width, boundRect.Height };
+        }
+        return { 0.0f, 0.0f };
+        };
 
-    // 1. 목적지 좌표 및 크기 (Destination)
-    float dx = (float)luaL_checknumber(L, 2);
-    float dy = (float)luaL_checknumber(L, 3);
-    float dw = (float)luaL_optnumber(L, 4, -1); // -1이면 원본 크기 사용 로직용
-    float dh = (float)luaL_optnumber(L, 5, -1);
+    // 5. 이미지 그리기 (기본값 파라미터가 많으므로 매우 편해집니다)
+    g["image"] = [](int id, float dx, float dy,
+        sol::optional<float> dw, sol::optional<float> dh,
+        sol::optional<float> sx, sol::optional<float> sy,
+        sol::optional<float> sw, sol::optional<float> sh) {
 
-    // 2. 소스 좌표 및 크기 (Source)
-    float sx = (float)luaL_optnumber(L, 6, 0);
-    float sy = (float)luaL_optnumber(L, 7, 0);
-    float sw = (float)luaL_optnumber(L, 8, -1);
-    float sh = (float)luaL_optnumber(L, 9, -1);
+        if (id >= 0 && id < (int)g_imageTable.size() && g_currentGraphics) {
+            Image* img = g_imageTable[id];
 
-    if (id >= 0 && id < (int)g_imageTable.size() && g_currentGraphics) {
-        Image* img = g_imageTable[id];
+            // 루아에서 넘어오지 않은 값들은 이미지 원본 크기/0으로 채움
+            float _dw = dw.value_or((float)img->GetWidth());
+            float _dh = dh.value_or((float)img->GetHeight());
+            float _sx = sx.value_or(0.0f);
+            float _sy = sy.value_or(0.0f);
+            float _sw = sw.value_or((float)img->GetWidth());
+            float _sh = sh.value_or((float)img->GetHeight());
 
-        // 기본값 처리: 인자가 생략되었을 경우 이미지 전체 크기로 설정
-        if (dw < 0) dw = (float)img->GetWidth();
-        if (dh < 0) dh = (float)img->GetHeight();
-        if (sw < 0) sw = (float)img->GetWidth();
-        if (sh < 0) sh = (float)img->GetHeight();
+            RectF destRect(dx, dy, _dw, _dh);
+            g_currentGraphics->DrawImage(img, destRect, _sx, _sy, _sw, _sh, UnitPixel);
+        }
+    };
 
-        // GDI+ DrawImage(이미지, 목적지 사각형, 소스 x, 소스 y, 소스 w, 소스 h, 단위)
-        RectF destRect(dx, dy, dw, dh);
-        g_currentGraphics->DrawImage(img, destRect, sx, sy, sw, sh, UnitPixel);
-    }
-    return 0;
-}
+    // 6. 클리핑 관련
+    g["setClip"] = [](int x, int y, int w, int h) {
+        if (g_currentGraphics) g_currentGraphics->SetClip(Rect(x, y, w, h));
+    };
 
-void register_draw(lua_State* L, const char* name) {
-    lua_newtable(L);
-    REG_METHOD(L, "rect", l_drawRect);
-    REG_METHOD(L, "color", l_setFillStyle);
-    REG_METHOD(L, "text", l_drawText);
-    REG_METHOD(L, "image", l_drawImage);
-    lua_setglobal(L, name);
+    g["resetClip"] = []() {
+        if (g_currentGraphics) g_currentGraphics->ResetClip();
+    };
 }
