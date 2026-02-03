@@ -5,22 +5,27 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <d2d1.h>
+#include <dwrite.h>
+#include <wincodec.h> // 이미지 로딩을 위한 WIC
 
+#pragma comment(lib, "d2d1.lib")
+#pragma comment(lib, "dwrite.lib")
 #pragma comment(lib, "Gdiplus.lib")
+#pragma comment(lib, "windowscodecs.lib")
 using namespace Gdiplus;
 
-extern Graphics* g_currentGraphics;
+extern ID2D1Factory* g_pD2DFactory;
+extern ID2D1DCRenderTarget* g_pDCRT;
+extern IDWriteFactory* g_pDWriteFactory;
+extern IWICImagingFactory* g_pWICFactory;
+
 extern HWND g_hwnd;
 extern sol::state lua;
 
-extern Graphics* g_currentGraphics;
-extern HWND g_hwnd;
 extern int gDrawW, gDrawH;
-extern PrivateFontCollection* g_pfc;
-
-extern Color g_currentColor;
-extern std::vector<Image*> g_imageTable;
-extern std::vector<Font*> g_fontTable;
+extern std::vector<ID2D1Bitmap*> g_bitmapTable;
+extern std::vector<IDWriteTextFormat*> g_fontTable;
 extern std::map<std::string, int> g_pathCache;
 
 inline std::wstring to_wstring(const std::string& s) {
