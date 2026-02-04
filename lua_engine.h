@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <windows.h>
 #include <sol/sol.hpp>
 #include <gdiplus.h>
@@ -7,7 +7,7 @@
 #include <map>
 #include <d2d1.h>
 #include <dwrite.h>
-#include <wincodec.h> // ÀÌ¹ÌÁö ·ÎµùÀ» À§ÇÑ WIC
+#include <wincodec.h> // ì´ë¯¸ì§€ ë¡œë”©ì„ ìœ„í•œ WIC
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
@@ -30,7 +30,7 @@ extern std::map<std::string, int> g_pathCache;
 
 struct StateLayer {
     D2D1_MATRIX_3X2_F matrix;
-    int clipDepth; // ÇØ´ç push ½ÃÁ¡ÀÇ Å¬¸³ ±íÀÌ
+    int clipDepth; // í•´ë‹¹ push ì‹œì ì˜ í´ë¦½ ê¹Šì´
 };
 extern int g_clipCount;
 extern std::vector<StateLayer> g_stateStack;
@@ -38,15 +38,15 @@ extern std::vector<StateLayer> g_stateStack;
 inline std::wstring to_wstring(const std::string& s) {
     if (s.empty()) return L"";
 
-    // ÇÊ¿äÇÑ Å©±â °è»ê
+    // í•„ìš”í•œ í¬ê¸° ê³„ì‚°
     int len = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, NULL, 0);
     if (len <= 0) return L"";
 
-    // wstring °ø°£ È®º¸
+    // wstring ê³µê°„ í™•ë³´
     std::wstring buf(len, L'\0');
     MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &buf[0], len);
 
-    // MultiByteToWideChar´Â ³Î ¹®ÀÚ¸¦ Æ÷ÇÔÇÏ¹Ç·Î, ³¡ÀÇ \0¸¦ Á¦°ÅÇØÁÖ´Â °Ô ÁÁ½À´Ï´Ù.
+    // MultiByteToWideCharëŠ” ë„ ë¬¸ìë¥¼ í¬í•¨í•˜ë¯€ë¡œ, ëì˜ \0ë¥¼ ì œê±°í•´ì£¼ëŠ” ê²Œ ì¢‹ìŠµë‹ˆë‹¤.
     if (!buf.empty() && buf.back() == L'\0') {
         buf.pop_back();
     }

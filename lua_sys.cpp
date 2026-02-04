@@ -1,10 +1,10 @@
-#include "lua_engine.h"
+ï»¿#include "lua_engine.h"
 #include <tuple>
 
 void register_sys(sol::state& lua, const char* name) {
     auto s = lua.create_named_table(name);
 
-    // 1. À©µµ¿ì Å©±â ¼³Á¤
+    // 1. ìœˆë„ìš° í¬ê¸° ì„¤ì •
     s["setSize"] = [](int w, int h) {
         if (g_hwnd) {
             SetWindowPos(g_hwnd, NULL, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
@@ -13,14 +13,14 @@ void register_sys(sol::state& lua, const char* name) {
         }
     };
 
-    // 2. À©µµ¿ì À§Ä¡ ¼³Á¤
+    // 2. ìœˆë„ìš° ìœ„ì¹˜ ì„¤ì •
     s["setPos"] = [](int x, int y) {
         if (g_hwnd) {
             SetWindowPos(g_hwnd, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
         }
         };
 
-    // 3. À©µµ¿ì ÇöÀç À§Ä¡ (x, y ¹İÈ¯)
+    // 3. ìœˆë„ìš° í˜„ì¬ ìœ„ì¹˜ (x, y ë°˜í™˜)
     s["getPos"] = []() {
         if (g_hwnd) {
             RECT rc;
@@ -30,7 +30,7 @@ void register_sys(sol::state& lua, const char* name) {
         return std::make_tuple((LONG)0, (LONG)0);
         };
 
-    // 4. À©µµ¿ì ÇöÀç Å©±â (w, h ¹İÈ¯)
+    // 4. ìœˆë„ìš° í˜„ì¬ í¬ê¸° (w, h ë°˜í™˜)
     s["getSize"] = []() {
         if (g_hwnd) {
             RECT rc;
@@ -40,7 +40,7 @@ void register_sys(sol::state& lua, const char* name) {
         return std::make_tuple(0, 0);
         };
 
-    // 5. ÀüÃ¼ È­¸é ¹× ÀÛ¾÷ ¿µ¿ª Å©±â
+    // 5. ì „ì²´ í™”ë©´ ë° ì‘ì—… ì˜ì—­ í¬ê¸°
     s["getScreenSize"] = []() {
         return std::make_tuple(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
         };
@@ -51,18 +51,18 @@ void register_sys(sol::state& lua, const char* name) {
         return std::make_tuple((int)(rc.right - rc.left), (int)(rc.bottom - rc.top));
         };
 
-    // 6. Ä¿¼­ Á¦¾î
+    // 6. ì»¤ì„œ ì œì–´
     s["showCursor"] = [](bool show) {
         ShowCursor(show);
         };
 
     s["setCursor"] = [](sol::optional<int> type) {
-        // ±âº»°ª IDC_ARROW (32512)
+        // ê¸°ë³¸ê°’ IDC_ARROW (32512)
         HCURSOR hCursor = LoadCursor(NULL, MAKEINTRESOURCE(type.value_or(32512)));
         SetCursor(hCursor);
         };
 
-    // 7. ¿£Áø Á¾·á
+    // 7. ì—”ì§„ ì¢…ë£Œ
     s["quit"] = []() {
         PostQuitMessage(0);
         };

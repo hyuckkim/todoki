@@ -1,17 +1,17 @@
-#include "lua_engine.h"
+ï»¿#include "lua_engine.h"
 #include <tuple>
 
 void register_input(sol::state& lua, const char* name) {
     auto i = lua.create_named_table(name);
 
-    // 1. Å°º¸µå ÀÔ·Â Ã¼Å©
+    // 1. í‚¤ë³´ë“œ ìž…ë ¥ ì²´í¬
     i["key"] = [](int vkey) -> bool {
         // short state = GetAsyncKeyState(vkey);
         // return (state & 0x8000) != 0;
         return (GetAsyncKeyState(vkey) & 0x8000) != 0;
     };
 
-    // 2. ¸¶¿ì½º Á¤º¸ (x, y, left, right) ¹ÝÈ¯
+    // 2. ë§ˆìš°ìŠ¤ ì •ë³´ (x, y, left, right) ë°˜í™˜
     i["mouse"] = []() {
         POINT pt;
         GetCursorPos(&pt);

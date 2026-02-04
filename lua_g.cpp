@@ -1,52 +1,52 @@
-#include "lua_engine.h"
+ï»¿#include "lua_engine.h"
 
-ID2D1SolidColorBrush* g_pSolidBrush = nullptr; // Àü¿ª ºê·¯½Ã ÇÏ³ª¸¦ »ö»ó º¯°æ ½Ã¸¶´Ù ¾÷µ¥ÀÌÆ®
-D2D1_COLOR_F g_d2dColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // ÇöÀç »ö»ó ÀúÀå¿ë
+ID2D1SolidColorBrush* g_pSolidBrush = nullptr; // ì „ì—­ ë¸ŒëŸ¬ì‹œ í•˜ë‚˜ë¥¼ ìƒ‰ìƒ ë³€ê²½ ì‹œë§ˆë‹¤ ì—…ë°ì´íŠ¸
+D2D1_COLOR_F g_d2dColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // í˜„ì¬ ìƒ‰ìƒ ì €ì¥ìš©
 int g_clipCount = 0;
 std::vector<StateLayer> g_stateStack;
 
 void register_draw(sol::state& lua, const char* name) {
     g_pDCRT->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
 
-    // 1. Å×ÀÌºí »ı¼º (±âÁ¸ lua_newtable + lua_setglobal ´ë¿ë)
+    // 1. í…Œì´ë¸” ìƒì„± (ê¸°ì¡´ lua_newtable + lua_setglobal ëŒ€ìš©)
     auto g = lua.create_named_table(name);
 
-    // 2. Rect ±×¸®±â
+    // 2. Rect ê·¸ë¦¬ê¸°
     g["rect"] = [](float x, float y, float w, float h) {
         if (g_pDCRT && g_pSolidBrush) {
-            g_pSolidBrush->SetColor(g_d2dColor); // ±×¸®±â Á÷Àü »ö»ó µ¿±âÈ­
+            g_pSolidBrush->SetColor(g_d2dColor); // ê·¸ë¦¬ê¸° ì§ì „ ìƒ‰ìƒ ë™ê¸°í™”
             g_pDCRT->FillRectangle(D2D1::RectF(x, y, x + w, y + h), g_pSolidBrush);
         }
     };
 
-    // 3. »ö»ó ¼³Á¤ (¾ËÆÄ°ª ¼±ÅÃÀû Ã³¸®)
-    // sol::optionalÀ» ¾²¸é ·ç¾Æ¿¡¼­ ÀÎÀÚ¸¦ ¾È º¸³ÂÀ» ¶§ ±âº»°ªÀ» ÁÙ ¼ö ÀÖ½À´Ï´Ù.
+    // 3. ìƒ‰ìƒ ì„¤ì • (ì•ŒíŒŒê°’ ì„ íƒì  ì²˜ë¦¬)
+    // sol::optionalì„ ì“°ë©´ ë£¨ì•„ì—ì„œ ì¸ìë¥¼ ì•ˆ ë³´ëƒˆì„ ë•Œ ê¸°ë³¸ê°’ì„ ì¤„ ìˆ˜ ìˆìŠµë‹ˆë‹¤.
     g["color"] = [](int r, int g, int b, sol::optional<int> a) {
         g_d2dColor = D2D1::ColorF(r / 255.0f, g / 255.0f, b / 255.0f, a.value_or(255) / 255.0f);
 
         if (g_pDCRT) {
             if (g_pSolidBrush == nullptr) {
-                // ºê·¯½Ã°¡ Ã³À½ÀÏ ¶§¸¸ »ı¼º
+                // ë¸ŒëŸ¬ì‹œê°€ ì²˜ìŒì¼ ë•Œë§Œ ìƒì„±
                 g_pDCRT->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
             }
             else {
-                // ÀÌ¹Ì ÀÖÀ¸¸é »ö»ó¸¸ º¯°æ (ÀÌ°Ô ÈÎ¾À ºü¸¨´Ï´Ù)
+                // ì´ë¯¸ ìˆìœ¼ë©´ ìƒ‰ìƒë§Œ ë³€ê²½ (ì´ê²Œ í›¨ì”¬ ë¹ ë¦…ë‹ˆë‹¤)
                 g_pSolidBrush->SetColor(g_d2dColor);
             }
         }
         };
 
-    // 4. ÅØ½ºÆ® ±×¸®±â
+    // 4. í…ìŠ¤íŠ¸ ê·¸ë¦¬ê¸°
     g["text"] = [](int fontId, std::string text, float x, float y) {
         if (fontId >= 0 && fontId < (int)g_fontTable.size() && g_pDCRT) {
             std::wstring wText = to_wstring(text);
             IDWriteTextFormat* pFormat = g_fontTable[fontId];
 
-            // D2D´Â ÅØ½ºÆ®¸¦ ±×¸± ¿µ¿ª(Rect)À» ÁöÁ¤ÇØ¾ß ÇÕ´Ï´Ù.
-            // x, yºÎÅÍ ½ÃÀÛÇØ¼­ ¾ÆÁÖ ³ĞÀº ¿µ¿ªÀ» Àâ¾ÆÁÖ¸é GDI+Ã³·³ µ¿ÀÛÇÕ´Ï´Ù.
+            // D2DëŠ” í…ìŠ¤íŠ¸ë¥¼ ê·¸ë¦´ ì˜ì—­(Rect)ì„ ì§€ì •í•´ì•¼ í•©ë‹ˆë‹¤.
+            // x, yë¶€í„° ì‹œì‘í•´ì„œ ì•„ì£¼ ë„“ì€ ì˜ì—­ì„ ì¡ì•„ì£¼ë©´ GDI+ì²˜ëŸ¼ ë™ì‘í•©ë‹ˆë‹¤.
             D2D1_RECT_F layoutRect = D2D1::RectF(x, y, 10000.0f, 10000.0f);
 
-            // ÇöÀç ¼³Á¤µÈ Àü¿ª ºê·¯½Ã(g_pSolidBrush)·Î ±×¸®±â
+            // í˜„ì¬ ì„¤ì •ëœ ì „ì—­ ë¸ŒëŸ¬ì‹œ(g_pSolidBrush)ë¡œ ê·¸ë¦¬ê¸°
             g_pDCRT->DrawText(
                 wText.c_str(),
                 (UINT32)wText.length(),
@@ -59,7 +59,7 @@ void register_draw(sol::state& lua, const char* name) {
     g["fontSize"] = [](int fontId, std::string text) -> std::pair<float, float> {
         if (fontId >= 0 && fontId < (int)g_fontTable.size()) {
             std::wstring wText = to_wstring(text);
-            IDWriteTextFormat* pFormat = g_fontTable[fontId]; // IDWriteTextFormat* ÀúÀåµÈ Å×ÀÌºí
+            IDWriteTextFormat* pFormat = g_fontTable[fontId]; // IDWriteTextFormat* ì €ì¥ëœ í…Œì´ë¸”
 
             IDWriteTextLayout* pLayout = nullptr;
             g_pDWriteFactory->CreateTextLayout(wText.c_str(), wText.length(), pFormat, 10000.0f, 10000.0f, &pLayout);
@@ -91,14 +91,14 @@ void register_draw(sol::state& lua, const char* name) {
             float _dh = dh.value_or(size.height);
             bool _flip = flipX.value_or(false);
 
-            // 1. ±âÁ¸ º¯È¯ Çà·Ä ¹é¾÷
+            // 1. ê¸°ì¡´ ë³€í™˜ í–‰ë ¬ ë°±ì—…
             D2D1_MATRIX_3X2_F oldTransform;
             g_pDCRT->GetTransform(&oldTransform);
 
-            // 2. ÁÂ¿ì ¹İÀüÀÌ ÇÊ¿äÇÒ °æ¿ì¿¡¸¸ ÀÏ½ÃÀû Çà·Ä Àû¿ë
+            // 2. ì¢Œìš° ë°˜ì „ì´ í•„ìš”í•  ê²½ìš°ì—ë§Œ ì¼ì‹œì  í–‰ë ¬ ì ìš©
             if (_flip) {
-                // Ä³¸¯ÅÍÀÇ 'ÇöÀç À§Ä¡ÀÇ Áß¾Ó'À» ±âÁØÀ¸·Î ¹İÀü½ÃÅ°´Â Çà·Ä °è»ê
-                // ±âÁ¸ Çà·Ä(oldTransform)¿¡ ¹İÀü Çà·ÄÀ» °öÇØÁİ´Ï´Ù.
+                // ìºë¦­í„°ì˜ 'í˜„ì¬ ìœ„ì¹˜ì˜ ì¤‘ì•™'ì„ ê¸°ì¤€ìœ¼ë¡œ ë°˜ì „ì‹œí‚¤ëŠ” í–‰ë ¬ ê³„ì‚°
+                // ê¸°ì¡´ í–‰ë ¬(oldTransform)ì— ë°˜ì „ í–‰ë ¬ì„ ê³±í•´ì¤ë‹ˆë‹¤.
                 D2D1_MATRIX_3X2_F flipMatrix = D2D1::Matrix3x2F::Scale(
                     -1.0f, 1.0f,
                     D2D1::Point2F(dx + _dw / 2.0f, dy + _dh / 2.0f)
@@ -106,7 +106,7 @@ void register_draw(sol::state& lua, const char* name) {
                 g_pDCRT->SetTransform(flipMatrix * oldTransform);
             }
 
-            // 3. ±×¸®±â (srcRect´Â Á¤¹æÇâÀ¸·Î ¼³Á¤)
+            // 3. ê·¸ë¦¬ê¸° (srcRectëŠ” ì •ë°©í–¥ìœ¼ë¡œ ì„¤ì •)
             D2D1_RECT_F destRect = D2D1::RectF(dx, dy, dx + _dw, dy + _dh);
             D2D1_RECT_F srcRect = D2D1::RectF(
                 sx.value_or(0.0f), sy.value_or(0.0f),
@@ -116,7 +116,7 @@ void register_draw(sol::state& lua, const char* name) {
 
             g_pDCRT->DrawBitmap(bmp, destRect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR, srcRect);
 
-            // 4. ¿ø·¡ Çà·Ä·Î Áï½Ã º¹±¸ (¸Å¿ì Áß¿ä!)
+            // 4. ì›ë˜ í–‰ë ¬ë¡œ ì¦‰ì‹œ ë³µêµ¬ (ë§¤ìš° ì¤‘ìš”!)
             if (_flip) {
                 g_pDCRT->SetTransform(oldTransform);
             }
@@ -138,17 +138,17 @@ void register_draw(sol::state& lua, const char* name) {
         StateLayer last = g_stateStack.back();
         g_stateStack.pop_back();
 
-        // 1. pushÇß´ø ½ÃÁ¡º¸´Ù ´õ ¸¹ÀÌ ½×ÀÎ Å¬¸³µéÀ» ¸ğµÎ ÇØÁ¦
+        // 1. pushí–ˆë˜ ì‹œì ë³´ë‹¤ ë” ë§ì´ ìŒ“ì¸ í´ë¦½ë“¤ì„ ëª¨ë‘ í•´ì œ
         while (g_clipCount > last.clipDepth) {
             g_pDCRT->PopAxisAlignedClip();
             g_clipCount--;
         }
 
-        // 2. º¯È¯ Çà·Ä º¹±¸
+        // 2. ë³€í™˜ í–‰ë ¬ ë³µêµ¬
         g_pDCRT->SetTransform(last.matrix);
         };
 
-    // 3. ÀÌµ¿ (Translate)
+    // 3. ì´ë™ (Translate)
     g["translate"] = [](float x, float y) {
         D2D1_MATRIX_3X2_F current, next;
         g_pDCRT->GetTransform(&current);
@@ -156,12 +156,12 @@ void register_draw(sol::state& lua, const char* name) {
         g_pDCRT->SetTransform(next);
         };
 
-    // 4. È®´ë/Ãà¼Ò (Scale)
+    // 4. í™•ëŒ€/ì¶•ì†Œ (Scale)
     g["scale"] = [](float sx, float sy, sol::optional<float> ox, sol::optional<float> oy) {
         D2D1_MATRIX_3X2_F current, next;
         g_pDCRT->GetTransform(&current);
 
-        // Áß½ÉÁ¡(ox, oy)ÀÌ ÁÖ¾îÁö¸é ±× ÁöÁ¡À» ±âÁØÀ¸·Î È®´ë, ¾Æ´Ï¸é (0,0) ±âÁØ
+        // ì¤‘ì‹¬ì (ox, oy)ì´ ì£¼ì–´ì§€ë©´ ê·¸ ì§€ì ì„ ê¸°ì¤€ìœ¼ë¡œ í™•ëŒ€, ì•„ë‹ˆë©´ (0,0) ê¸°ì¤€
         D2D1_POINT_2F center = D2D1::Point2F(ox.value_or(0.0f), oy.value_or(0.0f));
         next = current * D2D1::Matrix3x2F::Scale(sx, sy, center);
         g_pDCRT->SetTransform(next);

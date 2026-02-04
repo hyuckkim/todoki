@@ -167,13 +167,6 @@
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="todoki.rc" />
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="small.ico" />
-    <Image Include="todoki.ico" />
-  </ItemGroup>
-  <ItemGroup>
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lapi.h" />
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lauxlib.h" />
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lcode.h" />

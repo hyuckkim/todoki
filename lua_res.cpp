@@ -1,14 +1,14 @@
-#include "lua_engine.h"
+ï»¿#include "lua_engine.h"
 
-// Àü¿ª º¯¼ö ÃÊ±âÈ­ (±âÁ¸ À¯Áö)
+// ì „ì—­ ë³€ìˆ˜ ì´ˆê¸°í™” (ê¸°ì¡´ ìœ ì§€)
 Color g_currentColor(255, 255, 255, 255);
 std::vector<ID2D1Bitmap*> g_bitmapTable;
 std::vector<IDWriteTextFormat*> g_fontTable;
 std::vector<std::wstring> g_fontFamilyTable;
 std::map<std::string, int> g_pathCache;
 
-// sol2¿¡¼­´Â sol::state°¡ ¾Ë¾Æ¼­ Á×À» ¶§ Á¤¸®ÇÏÁö¸¸, 
-// GDI+ °´Ã¼(new·Î »ı¼ºÇÑ °Í)µéÀº ¸í½ÃÀûÀ¸·Î Áö¿öÁÖ´Â °Ô ÁÁ½À´Ï´Ù.
+// sol2ì—ì„œëŠ” sol::stateê°€ ì•Œì•„ì„œ ì£½ì„ ë•Œ ì •ë¦¬í•˜ì§€ë§Œ, 
+// GDI+ ê°ì²´(newë¡œ ìƒì„±í•œ ê²ƒ)ë“¤ì€ ëª…ì‹œì ìœ¼ë¡œ ì§€ì›Œì£¼ëŠ” ê²Œ ì¢‹ìŠµë‹ˆë‹¤.
 void unregisterLuaFunctions() {
     for (auto img : g_bitmapTable) img->Release();
     for (auto font : g_fontTable) font->Release();
@@ -23,19 +23,19 @@ void unregisterLuaFunctions() {
 void register_res(sol::state& lua, const char* name) {
     auto res = lua.create_named_table(name);
 
-    // 1. ÀÌ¹ÌÁö ·Îµå (Ä³½Ì ·ÎÁ÷ Æ÷ÇÔ)
+    // 1. ì´ë¯¸ì§€ ë¡œë“œ (ìºì‹± ë¡œì§ í¬í•¨)
     res["image"] = [](std::string path) -> int {
         auto it = g_pathCache.find(path);
         if (it != g_pathCache.end()) return it->second;
 
         std::wstring wPath = to_wstring(path);
 
-        // 1. µğÄÚ´õ »ı¼º
+        // 1. ë””ì½”ë” ìƒì„±
         IWICBitmapDecoder* pDecoder = nullptr;
         HRESULT hr = g_pWICFactory->CreateDecoderFromFilename(wPath.c_str(), NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
         
         if (FAILED(hr)) {
-            // [¿À·ù Ã³¸®] ÆÄÀÏÀÌ ¾ø°Å³ª ¿­ ¼ö ¾ø´Â °æ¿ì
+            // [ì˜¤ë¥˜ ì²˜ë¦¬] íŒŒì¼ì´ ì—†ê±°ë‚˜ ì—´ ìˆ˜ ì—†ëŠ” ê²½ìš°
             if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) {
                 printf("[Resource Error] File not found: %s\n", path.c_str());
             }
@@ -43,23 +43,23 @@ void register_res(sol::state& lua, const char* name) {
                 printf("[Resource Error] Failed to load '%s' (HRESULT: 0x%08X)\n", path.c_str(), hr);
             }
 
-            // ÇÁ·Î±×·¥ÀÌ Á×Áö ¾Êµµ·Ï -1À» ¹İÈ¯ÇÏ°Å³ª, 0¹ø(±âº» ¿¡·¯ ÀÌ¹ÌÁö)À» ¹İÈ¯
+            // í”„ë¡œê·¸ë¨ì´ ì£½ì§€ ì•Šë„ë¡ -1ì„ ë°˜í™˜í•˜ê±°ë‚˜, 0ë²ˆ(ê¸°ë³¸ ì—ëŸ¬ ì´ë¯¸ì§€)ì„ ë°˜í™˜
             return -1;
         }
-        // 2. Ã¹ ¹øÂ° ÇÁ·¹ÀÓ °¡Á®¿À±â
+        // 2. ì²« ë²ˆì§¸ í”„ë ˆì„ ê°€ì ¸ì˜¤ê¸°
         IWICBitmapFrameDecode* pSource = nullptr;
         pDecoder->GetFrame(0, &pSource);
 
-        // 3. Æ÷¸Ë º¯È¯ (D2D°¡ ÁÁ¾ÆÇÏ´Â 32bppPBGRA·Î)
+        // 3. í¬ë§· ë³€í™˜ (D2Dê°€ ì¢‹ì•„í•˜ëŠ” 32bppPBGRAë¡œ)
         IWICFormatConverter* pConverter = nullptr;
         g_pWICFactory->CreateFormatConverter(&pConverter);
         pConverter->Initialize(pSource, GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, NULL, 0.f, WICBitmapPaletteTypeMedianCut);
 
-        // 4. D2D ºñÆ®¸Ê »ı¼º
+        // 4. D2D ë¹„íŠ¸ë§µ ìƒì„±
         ID2D1Bitmap* pBitmap = nullptr;
         g_pDCRT->CreateBitmapFromWicBitmap(pConverter, NULL, &pBitmap);
 
-        // Á¤¸®
+        // ì •ë¦¬
         pConverter->Release();
         pSource->Release();
         pDecoder->Release();
@@ -70,12 +70,12 @@ void register_res(sol::state& lua, const char* name) {
         return newID;
     };
 
-    // 2. ½Ã½ºÅÛ ÆùÆ® ·Îµå
+    // 2. ì‹œìŠ¤í…œ í°íŠ¸ ë¡œë“œ
     res["font"] = [](std::string name, float size, sol::optional<int> weight) -> int {
         std::wstring wName = to_wstring(name);
 
         IDWriteTextFormat* pTextFormat = nullptr;
-        // weight: DWRITE_FONT_WEIGHT_NORMAL (400) µî »ç¿ë
+        // weight: DWRITE_FONT_WEIGHT_NORMAL (400) ë“± ì‚¬ìš©
         g_pDWriteFactory->CreateTextFormat(
             wName.c_str(), NULL,
             (DWRITE_FONT_WEIGHT)weight.value_or(400),
@@ -89,25 +89,25 @@ void register_res(sol::state& lua, const char* name) {
         return id;
         };
 
-    // 3. ÆùÆ® ÆÄÀÏ(.ttf) ·Îµå
+    // 3. í°íŠ¸ íŒŒì¼(.ttf) ë¡œë“œ
     res["fontFile"] = [](std::string path, std::string familyName, float size) -> int {
-        // 1. ÆÄÀÏ Á¸Àç ¿©ºÎ È®ÀÎ (±âº»ÀûÀÎ °¡µå)
+        // 1. íŒŒì¼ ì¡´ì¬ ì—¬ë¶€ í™•ì¸ (ê¸°ë³¸ì ì¸ ê°€ë“œ)
         std::wstring wPath = to_wstring(path);
         std::wstring wName = to_wstring(familyName);
 
-        // 2. OS¿¡ ÆùÆ® µî·Ï ½Ãµµ
-        // ¹İÈ¯°ªÀÌ 0ÀÌ¸é µî·Ï ½ÇÆĞ (ÆÄÀÏÀÌ ¾ø°Å³ª Çü½ÄÀÌ Àß¸øµÊ)
+        // 2. OSì— í°íŠ¸ ë“±ë¡ ì‹œë„
+        // ë°˜í™˜ê°’ì´ 0ì´ë©´ ë“±ë¡ ì‹¤íŒ¨ (íŒŒì¼ì´ ì—†ê±°ë‚˜ í˜•ì‹ì´ ì˜ëª»ë¨)
         int fontsAdded = AddFontResourceExW(wPath.c_str(), FR_PRIVATE, 0);
 
         if (fontsAdded == 0) {
             printf("[Resource Error] Font file not found or invalid: %s\n", path.c_str());
-            // ½ÇÆĞ ½Ã -1 ¹İÈ¯ È¤Àº ±âº» ÆùÆ® Ã³¸®
+            // ì‹¤íŒ¨ ì‹œ -1 ë°˜í™˜ í˜¹ì€ ê¸°ë³¸ í°íŠ¸ ì²˜ë¦¬
             return -1;
         }
 
         g_fontFamilyTable.push_back(wPath);
 
-        // 3. TextFormat »ı¼º
+        // 3. TextFormat ìƒì„±
         IDWriteTextFormat* pTextFormat = nullptr;
         HRESULT hr = g_pDWriteFactory->CreateTextFormat(
             wName.c_str(),
@@ -120,7 +120,7 @@ void register_res(sol::state& lua, const char* name) {
 
         if (FAILED(hr)) {
             printf("[Resource Error] Failed to create TextFormat for: %s (HRESULT: 0x%08X)\n", familyName.c_str(), hr);
-            // µî·ÏÇß´ø ¸®¼Ò½º ÇØÁ¦
+            // ë“±ë¡í–ˆë˜ ë¦¬ì†ŒìŠ¤ í•´ì œ
             RemoveFontResourceExW(wPath.c_str(), FR_PRIVATE, 0);
             return -1;
         }
@@ -131,11 +131,11 @@ void register_res(sol::state& lua, const char* name) {
         return id;
         };
 
-    // 4. µåµğ¾î ´ë¸ÁÀÇ JSON ·Î´õ (¿©±â¿¡ ²ÈÀ¸½Ã¸é µË´Ï´Ù)
+    // 4. ë“œë””ì–´ ëŒ€ë§ì˜ JSON ë¡œë” (ì—¬ê¸°ì— ê½‚ìœ¼ì‹œë©´ ë©ë‹ˆë‹¤)
     res["json"] = [&lua](std::string path) -> sol::object {
-        // nlohmann/json µîÀ» ½á¼­ ÆÄÀÏÀ» ÀĞÀº µÚ 
-        // sol::table·Î º¯È¯ÇØ¼­ ¹İÈ¯ÇÒ ¿¹Á¤ÀÔ´Ï´Ù.
-        // Áö±İÀº ÀÏ´Ü nilÀ» ¹İÈ¯ÇÏ°Ô µÓ´Ï´Ù.
+        // nlohmann/json ë“±ì„ ì¨ì„œ íŒŒì¼ì„ ì½ì€ ë’¤ 
+        // sol::tableë¡œ ë³€í™˜í•´ì„œ ë°˜í™˜í•  ì˜ˆì •ì…ë‹ˆë‹¤.
+        // ì§€ê¸ˆì€ ì¼ë‹¨ nilì„ ë°˜í™˜í•˜ê²Œ ë‘¡ë‹ˆë‹¤.
         return sol::nil;
         };
 }

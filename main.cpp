@@ -54,16 +54,13 @@ void InitLuaEngine() {
     lua["print"] = [](sol::variadic_args args) {
         std::string full_msg = "";
 
-        // 루아의 전역 tostring 함수를 가져옵니다.
         sol::function to_string = lua["tostring"];
 
         for (auto v : args) {
-            // sol::object로 인자를 받아서 tostring()에 넣습니다.
             std::string s = to_string(v.get<sol::object>());
             full_msg += s + "  ";
         }
 
-        // 버퍼에 저장 (나중에 한 번에 printf 하기 위함)
         g_frameLogBuffer.push_back(full_msg);
         };
 
