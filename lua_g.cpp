@@ -76,8 +76,6 @@ void register_draw(sol::state& lua, const char* name) {
         return { 0.0f, 0.0f };
     };
 
-    // 5. 이미지 그리기 (기본값 파라미터가 많으므로 매우 편해집니다)
-    // [C++] 소스 사각형을 뒤집는 방식
     g["image"] = [](int id, float dx, float dy,
         sol::optional<float> dw, sol::optional<float> dh,
         sol::optional<float> sx, sol::optional<float> sy,

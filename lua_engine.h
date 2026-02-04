@@ -28,6 +28,13 @@ extern std::vector<ID2D1Bitmap*> g_bitmapTable;
 extern std::vector<IDWriteTextFormat*> g_fontTable;
 extern std::map<std::string, int> g_pathCache;
 
+struct StateLayer {
+    D2D1_MATRIX_3X2_F matrix;
+    int clipDepth; // 해당 push 시점의 클립 깊이
+};
+extern int g_clipCount;
+extern std::vector<StateLayer> g_stateStack;
+
 inline std::wstring to_wstring(const std::string& s) {
     if (s.empty()) return L"";
 

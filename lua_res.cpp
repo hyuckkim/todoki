@@ -32,8 +32,20 @@ void register_res(sol::state& lua, const char* name) {
 
         // 1. 디코더 생성
         IWICBitmapDecoder* pDecoder = nullptr;
-        g_pWICFactory->CreateDecoderFromFilename(wPath.c_str(), NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
+        HRESULT hr = g_pWICFactory->CreateDecoderFromFilename(wPath.c_str(), NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
+        
+        if (FAILED(hr)) {
+            // [오류 처리] 파일이 없거나 열 수 없는 경우
+            if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) {
+                printf("[Resource Error] File not found: %s\n", path.c_str());
+            }
+            else {
+                printf("[Resource Error] Failed to load '%s' (HRESULT: 0x%08X)\n", path.c_str(), hr);
+            }
 
+            // 프로그램이 죽지 않도록 -1을 반환하거나, 0번(기본 에러 이미지)을 반환
+            return -1;
+        }
         // 2. 첫 번째 프레임 가져오기
         IWICBitmapFrameDecode* pSource = nullptr;
         pDecoder->GetFrame(0, &pSource);
@@ -79,15 +91,25 @@ void register_res(sol::state& lua, const char* name) {
 
     // 3. 폰트 파일(.ttf) 로드
     res["fontFile"] = [](std::string path, std::string familyName, float size) -> int {
+        // 1. 파일 존재 여부 확인 (기본적인 가드)
         std::wstring wPath = to_wstring(path);
         std::wstring wName = to_wstring(familyName);
 
-        // 1. OS에 폰트 등록
-        AddFontResourceExW(wPath.c_str(), FR_PRIVATE, 0);
-		g_fontFamilyTable.push_back(wPath);
+        // 2. OS에 폰트 등록 시도
+        // 반환값이 0이면 등록 실패 (파일이 없거나 형식이 잘못됨)
+        int fontsAdded = AddFontResourceExW(wPath.c_str(), FR_PRIVATE, 0);
 
+        if (fontsAdded == 0) {
+            printf("[Resource Error] Font file not found or invalid: %s\n", path.c_str());
+            // 실패 시 -1 반환 혹은 기본 폰트 처리
+            return -1;
+        }
+
+        g_fontFamilyTable.push_back(wPath);
+
+        // 3. TextFormat 생성
         IDWriteTextFormat* pTextFormat = nullptr;
-        g_pDWriteFactory->CreateTextFormat(
+        HRESULT hr = g_pDWriteFactory->CreateTextFormat(
             wName.c_str(),
             nullptr,
             DWRITE_FONT_WEIGHT_NORMAL,
@@ -96,8 +118,16 @@ void register_res(sol::state& lua, const char* name) {
             size, L"ko-kr", &pTextFormat
         );
 
+        if (FAILED(hr)) {
+            printf("[Resource Error] Failed to create TextFormat for: %s (HRESULT: 0x%08X)\n", familyName.c_str(), hr);
+            // 등록했던 리소스 해제
+            RemoveFontResourceExW(wPath.c_str(), FR_PRIVATE, 0);
+            return -1;
+        }
+
         int id = (int)g_fontTable.size();
         g_fontTable.push_back(pTextFormat);
+
         return id;
         };
 

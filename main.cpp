@@ -23,14 +23,24 @@ int     g_bufH = 0;
             auto result = f(__VA_ARGS__); \
             if (!result.valid()) { \
                 sol::error err = result; \
-                printf("[LUA ERROR] %s: %s\n", func_name, err.what()); \
+                static std::string last_error = ""; \
+                std::string current_error = err.what(); \
+                \
+                /* 이전 에러와 다를 때만 출력 */ \
+                if (last_error != current_error) { \
+                    printf("[LUA ERROR] %s: %s\n", func_name, current_error.c_str()); \
+                    last_error = current_error; \
+                } \
             } \
         } \
     }
 
+std::vector<std::string> g_frameLogBuffer;
 void InitLuaEngine() {
-    // 1. sol::state는 새로 생성하거나 collect_garbage를 통해 정리 가능
-    // 기존 g_L을 수동으로 닫던 복잡한 과정이 줄어듭니다.
+    g_stateStack.clear();
+    g_clipCount = 0;
+    g_frameLogBuffer.clear();
+
     lua = sol::state();
     lua.open_libraries(
         sol::lib::base,
@@ -40,14 +50,28 @@ void InitLuaEngine() {
         sol::lib::math,
         sol::lib::debug
     );
+    
+    lua["print"] = [](sol::variadic_args args) {
+        std::string full_msg = "";
 
-    // 2. API 등록 (sol2 스타일로 변경된 함수들 호출)
+        // 루아의 전역 tostring 함수를 가져옵니다.
+        sol::function to_string = lua["tostring"];
+
+        for (auto v : args) {
+            // sol::object로 인자를 받아서 tostring()에 넣습니다.
+            std::string s = to_string(v.get<sol::object>());
+            full_msg += s + "  ";
+        }
+
+        // 버퍼에 저장 (나중에 한 번에 printf 하기 위함)
+        g_frameLogBuffer.push_back(full_msg);
+        };
+
     register_sys(lua, "sys");
     register_input(lua, "is");
     register_draw(lua, "g");
     register_res(lua, "res");
 
-    // 3. 스크립트 로드 (sol::load_result 사용으로 안전하게)
     auto load_result = lua.script_file("main.lua", sol::script_pass_on_error);
     if (!load_result.valid()) {
         sol::error err = load_result;
@@ -70,7 +94,15 @@ void InitD2D() {
     // DCRT 생성 (실제 사용은 BindDC에서 함)
     g_pD2DFactory->CreateDCRenderTarget(&props, &g_pDCRT);
 }
+void flush_logs() {
+    if (g_frameLogBuffer.empty()) return;
 
+    for (const auto& log : g_frameLogBuffer) {
+        printf("%s\n", log.c_str());
+    }
+
+    g_frameLogBuffer.clear();
+}
 void refreshBackBuffer(int w, int h) {
     if (g_hBmp)
     {
@@ -154,10 +186,18 @@ void drawing() {
     );
 }
 
+bool needReload = false;
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_TIMER:
-		drawing();
+        drawing();
+        flush_logs();
+        if (needReload) {
+            printf("[Win] Reloading Script...\n");
+            InitLuaEngine();
+            CALL_LUA_FUNC(lua, "Init");
+            needReload = false;
+        }
         break;
 
     case WM_DESTROY:
@@ -166,13 +206,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_KEYDOWN:
 		CALL_LUA_FUNC(lua, "OnKeyDown", (int)wParam);
 
-        if (wParam == VK_F5) {
 #ifdef _DEBUG
-            printf("Reloading Script...\n");
-            InitLuaEngine();
-            CALL_LUA_FUNC(lua, "Init");
-#endif
+        if (wParam == VK_F5) {
+            printf("[Win] reload requested...");
+            needReload = true;
         }
+#endif
         break;
 
     case WM_KEYUP:
@@ -201,15 +240,19 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     return 0;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR lpCmdLine, int nCmdShow) {
+int APIENTRY wWinMain(
+    _In_ HINSTANCE hInstance,
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_ LPWSTR    lpCmdLine,
+    _In_ int       nCmdShow) {
     // GDI+ 초기화
     GdiplusStartupInput gdiplusStartupInput;
     ULONG_PTR gdiplusToken;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr);
 
-    DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
-    CoInitialize(NULL); // WIC와 COM 사용을 위해 필수
-    CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_pWICFactory));
+    HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
+    hr = CoInitialize(NULL); // WIC와 COM 사용을 위해 필수
+    hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_pWICFactory));
 #ifdef _DEBUG
     if (AllocConsole()) {
         FILE* fp;
