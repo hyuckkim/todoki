@@ -1,4 +1,4 @@
-﻿#include "lua_engine.h"
+#include "lua_engine.h"
 
 sol::state lua;
 ULONGLONG lastTick = 0;
@@ -15,7 +15,9 @@ HBITMAP g_hBmp = nullptr;
 HBITMAP g_hBmpOld = nullptr;
 int     g_bufW = 0;
 int     g_bufH = 0;
+std::string entryFile = "main.lua";
 
+static std::string g_last_lua_error = "";
 #define CALL_LUA_FUNC(lua_state, func_name, ...) \
     { \
         sol::protected_function f = lua_state[func_name]; \
@@ -23,23 +25,30 @@ int     g_bufH = 0;
             auto result = f(__VA_ARGS__); \
             if (!result.valid()) { \
                 sol::error err = result; \
-                static std::string last_error = ""; \
                 std::string current_error = err.what(); \
                 \
-                /* 이전 에러와 다를 때만 출력 */ \
-                if (last_error != current_error) { \
+                if (g_last_lua_error != current_error) { \
                     printf("[LUA ERROR] %s: %s\n", func_name, current_error.c_str()); \
-                    last_error = current_error; \
+                    g_last_lua_error = current_error; \
                 } \
             } \
         } \
     }
 
+std::string to_string(const std::wstring& wstr) {
+    if (wstr.empty()) return "";
+    int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
+    std::string strTo(size_needed, 0);
+    WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), &strTo[0], size_needed, NULL, NULL);
+    return strTo;
+}
+
 std::vector<std::string> g_frameLogBuffer;
-void InitLuaEngine() {
+void InitLuaEngine(const char* main) {
     g_stateStack.clear();
     g_clipCount = 0;
     g_frameLogBuffer.clear();
+    g_last_lua_error = "";
 
     lua = sol::state();
     lua.open_libraries(
@@ -69,7 +78,7 @@ void InitLuaEngine() {
     register_draw(lua, "g");
     register_res(lua, "res");
 
-    auto load_result = lua.script_file("main.lua", sol::script_pass_on_error);
+    auto load_result = lua.script_file(main, sol::script_pass_on_error);
     if (!load_result.valid()) {
         sol::error err = load_result;
         printf("[LUA ERROR] %s\n", err.what());
@@ -191,7 +200,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         flush_logs();
         if (needReload) {
             printf("[Win] Reloading Script...\n");
-            InitLuaEngine();
+            InitLuaEngine(entryFile.c_str());
             CALL_LUA_FUNC(lua, "Init");
             needReload = false;
         }
@@ -205,7 +214,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 
 #ifdef _DEBUG
         if (wParam == VK_F5) {
-            printf("[Win] reload requested...");
             needReload = true;
         }
 #endif
@@ -258,8 +266,18 @@ int APIENTRY wWinMain(
         printf("Debug Console Opened\n");
     }
 #endif
+
+    int argc;
+    LPWSTR* argv = CommandLineToArgvW(GetCommandLineW(), &argc);
+
+    if (argv && argc > 1) {
+        // 인자가 있다면 첫 번째 인자를 entryFile로 설정 (argv[0]은 실행파일 경로)
+        entryFile = to_string(argv[1]);
+        printf("[Engine] Entry script changed to: %s\n", entryFile.c_str());
+    }
+
     InitD2D();
-    InitLuaEngine();
+    InitLuaEngine(entryFile.c_str());
 
     // 2. 루아로부터 받아온 설정값으로 윈도우 생성 (g_L이 준비되었으므로 안전)
     gDrawW = lua.get_or("ScreenWidth", 800);
