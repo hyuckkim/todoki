@@ -1,6 +1,15 @@
-﻿#pragma once
+#pragma once
 #include <windows.h>
+
+#include <codeanalysis\warnings.h>
+#pragma warning( push )
+#pragma warning ( disable : ALL_CODE_ANALYSIS_WARNINGS )
 #include <sol/sol.hpp>
+#include <nlohmann/json.hpp>
+#pragma warning( pop )
+
+#include <future>
+#include <fstream>
 #include <gdiplus.h>
 #include <string>
 #include <vector>
@@ -14,6 +23,7 @@
 #pragma comment(lib, "Gdiplus.lib")
 #pragma comment(lib, "windowscodecs.lib")
 using namespace Gdiplus;
+using json = nlohmann::json;
 
 extern ID2D1Factory* g_pD2DFactory;
 extern ID2D1DCRenderTarget* g_pDCRT;
@@ -53,6 +63,9 @@ inline std::wstring to_wstring(const std::string& s) {
 
     return buf;
 }
+
+// JSON 익스프레션을 sol::object로 변환하는 재귀 함수
+sol::object json_to_lua(const json& j, sol::state_view& lua);
 
 void register_draw(sol::state& lua, const char* name);
 void register_input(sol::state& lua, const char* name);

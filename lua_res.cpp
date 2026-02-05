@@ -1,4 +1,4 @@
-﻿#include "lua_engine.h"
+#include "lua_engine.h"
 
 // 전역 변수 초기화 (기존 유지)
 Color g_currentColor(255, 255, 255, 255);
@@ -18,6 +18,35 @@ void unregisterLuaFunctions() {
     g_fontTable.clear();
     g_bitmapTable.clear();
     g_pathCache.clear();
+}
+
+
+sol::object json_to_lua(const json& j, sol::state_view& lua) {
+
+    if (j.is_null()) return sol::nil;
+    if (j.is_boolean()) return sol::make_object(lua, j.get<bool>());
+    if (j.is_number_integer()) return sol::make_object(lua, j.get<long long>());
+    if (j.is_number_float()) return sol::make_object(lua, j.get<double>());
+    if (j.is_string()) return sol::make_object(lua, j.get<std::string>());
+
+    if (j.is_array()) {
+        sol::table obj = lua.create_table();
+        for (int i = 0; i < j.size(); ++i) {
+            // Lua는 인덱스가 1부터 시작하므로 i + 1
+            obj[i + 1] = json_to_lua(j[i], lua);
+        }
+        return obj;
+    }
+
+    if (j.is_object()) {
+        sol::table obj = lua.create_table();
+        for (auto& el : j.items()) {
+            obj[el.key()] = json_to_lua(el.value(), lua);
+        }
+        return obj;
+    }
+
+    return sol::nil;
 }
 
 void register_res(sol::state& lua, const char* name) {
@@ -133,9 +162,23 @@ void register_res(sol::state& lua, const char* name) {
 
     // 4. 드디어 대망의 JSON 로더 (여기에 꽂으시면 됩니다)
     res["json"] = [&lua](std::string path) -> sol::object {
-        // nlohmann/json 등을 써서 파일을 읽은 뒤 
-        // sol::table로 변환해서 반환할 예정입니다.
-        // 지금은 일단 nil을 반환하게 둡니다.
-        return sol::nil;
+        std::ifstream file(path);
+        if (!file.is_open()) {
+            printf("[Resource Error] Failed to open JSON file: %s\n", path.c_str());
+            return sol::nil;
+        }
+
+        json j;
+        try {
+            file >> j;
+        }
+        catch (const json::parse_error& e) {
+            printf("[JSON Error] Parse error: %s\n", e.what());
+            return sol::nil;
+        }
+
+        // 전역 lua 상태를 사용하여 변환
+        sol::state_view lua_view(lua);
+        return json_to_lua(j, lua_view);
         };
 }
