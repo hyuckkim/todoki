@@ -42,6 +42,14 @@ struct StateLayer {
     D2D1_MATRIX_3X2_F matrix;
     int clipDepth; // 해당 push 시점의 클립 깊이
 };
+
+struct ITask {
+    virtual ~ITask() = default;
+    virtual bool check(sol::this_state s) = 0;
+    virtual sol::object getResult() = 0;
+    bool isDone = false;
+};
+
 extern int g_clipCount;
 extern std::vector<StateLayer> g_stateStack;
 

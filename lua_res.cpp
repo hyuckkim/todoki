@@ -20,7 +20,23 @@ void unregisterLuaFunctions() {
     g_pathCache.clear();
 }
 
+struct JsonTask : public ITask {
+    std::future<nlohmann::json> fuel;
+    sol::object result = sol::nil;
 
+    bool check(sol::this_state s) override {
+        if (isDone) return true;
+        if (fuel.valid() && fuel.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            sol::state_view lua(s);
+            result = json_to_lua(fuel.get(), lua); // JSON -> Table 변환
+            isDone = true;
+            return true;
+        }
+        return false;
+    }
+
+    sol::object getResult() override { return result; }
+};
 sol::object json_to_lua(const json& j, sol::state_view& lua) {
 
     if (j.is_null()) return sol::nil;
@@ -50,6 +66,12 @@ sol::object json_to_lua(const json& j, sol::state_view& lua) {
 }
 
 void register_res(sol::state& lua, const char* name) {
+    lua.new_usertype<ITask>("Task",
+        "check", &ITask::check,
+        "getResult", &ITask::getResult,
+        "isDone", sol::readonly(&ITask::isDone)
+    );
+
     auto res = lua.create_named_table(name);
 
     // 1. 이미지 로드 (캐싱 로직 포함)
@@ -180,5 +202,15 @@ void register_res(sol::state& lua, const char* name) {
         // 전역 lua 상태를 사용하여 변환
         sol::state_view lua_view(lua);
         return json_to_lua(j, lua_view);
+        };
+    res["jsonAsync"] = [](std::string path) -> std::shared_ptr<ITask> {
+        auto task = std::make_shared<JsonTask>();
+        task->fuel = std::async(std::launch::async, [path]() {
+            std::ifstream file(path);
+            nlohmann::json j;
+            if (file.is_open()) file >> j;
+            return j;
+            });
+        return task; // JsonTask지만 ITask로 반환
         };
 }
