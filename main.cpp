@@ -195,17 +195,6 @@ void drawing() {
 bool needReload = false;
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
-    case WM_TIMER:
-        drawing();
-        flush_logs();
-        if (needReload) {
-            printf("[Win] Reloading Script...\n");
-            InitLuaEngine(entryFile.c_str());
-            CALL_LUA_FUNC(lua, "Init");
-            needReload = false;
-        }
-        break;
-
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -260,6 +249,7 @@ int APIENTRY wWinMain(
     hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_pWICFactory));
 #ifdef _DEBUG
     if (AllocConsole()) {
+        SetConsoleOutputCP(CP_UTF8);
         FILE* fp;
         freopen_s(&fp, "CONOUT$", "w", stdout);
         freopen_s(&fp, "CONOUT$", "w", stderr);
@@ -298,13 +288,26 @@ int APIENTRY wWinMain(
 
     lastTick = GetTickCount64();
     ShowWindow(g_hwnd, nCmdShow);
-    SetTimer(g_hwnd, 1, 1, nullptr);
 
 	CALL_LUA_FUNC(lua, "Init");
     MSG msg;
-    while (GetMessage(&msg, nullptr, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+    while (true) {
+        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) break;
+
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        else {
+            drawing();
+            flush_logs();
+            if (needReload) {
+                printf("[Win] Reloading Script...\n");
+                InitLuaEngine(entryFile.c_str());
+                CALL_LUA_FUNC(lua, "Init");
+                needReload = false;
+            }
+        }
     }
 
     if (g_pDCRT) g_pDCRT->Release();
