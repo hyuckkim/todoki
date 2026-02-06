@@ -147,6 +147,10 @@ void refreshBackBuffer(int w, int h) {
 
     g_bufW = w;
     g_bufH = h;
+    RECT rc = { 0, 0, w, h };
+    if (g_pDCRT) {
+        g_pDCRT->BindDC(g_hdcMem, &rc);
+    }
 }
 void drawing() {
     ULONGLONG now = GetTickCount64();
@@ -158,15 +162,9 @@ void drawing() {
     if (w <= 0 || h <= 0) return;
 
     // 1. 백버퍼 생성/재생성 (기존 로직 유지)
-    if (!g_hBmp || w != g_bufW || h != g_bufH)
-    {
+    if (!g_hBmp || w != g_bufW || h != g_bufH) {
         refreshBackBuffer(w, h);
     }
-
-    // 2. Direct2D 렌더링 시작
-    RECT rc = { 0, 0, w, h };
-    g_pDCRT->BindDC(g_hdcMem, &rc); // D2D를 기존 메모리 DC에 붙입니다.
-
     g_pDCRT->BeginDraw();
     g_pDCRT->SetTransform(D2D1::Matrix3x2F::Identity());
     g_pDCRT->Clear(D2D1::ColorF(0, 0, 0, 0)); // GPU 가속 클리어
@@ -275,6 +273,9 @@ int APIENTRY wWinMain(
     std::string title = lua.get_or<std::string>("WindowTitle", "Fantasy Wagon");
     std::wstring titleW = to_wstring(title);
 
+    const int TARGET_FPS = 60;
+    const int FRAME_DELAY = 1000 / TARGET_FPS;
+
     // 윈도우 클래스 등록 및 생성
     WNDCLASS wc = { 0 };
     wc.lpfnWndProc = WndProc;
@@ -292,6 +293,7 @@ int APIENTRY wWinMain(
 	CALL_LUA_FUNC(lua, "Init");
     MSG msg;
     while (true) {
+        ULONGLONG frameStart = GetTickCount64(); // 시작 시간 기록
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) break;
 
@@ -306,6 +308,11 @@ int APIENTRY wWinMain(
                 InitLuaEngine(entryFile.c_str());
                 CALL_LUA_FUNC(lua, "Init");
                 needReload = false;
+            }
+            // 프레임 제어
+            ULONGLONG frameTime = GetTickCount64() - frameStart;
+            if (frameTime < FRAME_DELAY) {
+                Sleep(FRAME_DELAY - (DWORD)frameTime);
             }
         }
     }
