@@ -3,21 +3,83 @@
 // 전역 변수 초기화 (기존 유지)
 Color g_currentColor(255, 255, 255, 255);
 std::vector<ID2D1Bitmap*> g_bitmapTable;
+std::map<std::string, int> g_pathCache;
 std::vector<IDWriteTextFormat*> g_fontTable;
 std::vector<std::wstring> g_fontFamilyTable;
-std::map<std::string, int> g_pathCache;
 static std::unordered_map<std::string, std::unique_ptr<nlohmann::json>> g_JsonCache;
 static std::mutex g_JsonMutex;
 
+ID2D1Bitmap* LoadBitmapFromFile(
+    ID2D1DCRenderTarget* rt,
+    const std::string& path
+) {
+    std::wstring wPath = to_wstring(path);
+
+    IWICBitmapDecoder* pDecoder = nullptr;
+    HRESULT hr = g_pWICFactory->CreateDecoderFromFilename(
+        wPath.c_str(),
+        NULL,
+        GENERIC_READ,
+        WICDecodeMetadataCacheOnLoad,
+        &pDecoder
+    );
+
+    if (FAILED(hr)) {
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) {
+            printf("[Resource Error] File not found: %s\n", path.c_str());
+        }
+        else {
+            printf("[Resource Error] Failed to load '%s' (HRESULT: 0x%08X)\n", path.c_str(), hr);
+        }
+        return nullptr;
+    }
+
+    IWICBitmapFrameDecode* pSource = nullptr;
+    pDecoder->GetFrame(0, &pSource);
+
+    IWICFormatConverter* pConverter = nullptr;
+    g_pWICFactory->CreateFormatConverter(&pConverter);
+    pConverter->Initialize(
+        pSource,
+        GUID_WICPixelFormat32bppPBGRA,
+        WICBitmapDitherTypeNone,
+        NULL,
+        0.f,
+        WICBitmapPaletteTypeMedianCut
+    );
+
+    ID2D1Bitmap* pBitmap = nullptr;
+    rt->CreateBitmapFromWicBitmap(pConverter, NULL, &pBitmap);
+
+    pConverter->Release();
+    pSource->Release();
+    pDecoder->Release();
+
+    return pBitmap; // 실패 시 nullptr 가능
+}
+
 void unregisterLuaFunctions() {
-    for (auto img : g_bitmapTable) img->Release();
-    for (auto font : g_fontTable) font->Release();
+    for (auto img : g_bitmapTable) if (img) img->Release();
+    for (auto font : g_fontTable) if (font) font->Release();
     for (auto& fontPath : g_fontFamilyTable) {
         RemoveFontResourceExW(fontPath.c_str(), FR_PRIVATE, 0);
 	}
     g_fontTable.clear();
     g_bitmapTable.clear();
     g_pathCache.clear();
+}
+
+void RebuildAllBitmaps() {
+    for (auto& bmp : g_bitmapTable) {
+        SafeRelease(&bmp);
+    }
+    for (const auto& [path, index]: g_pathCache) {
+        if (index < 0 || index >= (int)g_bitmapTable.size())
+            continue; // 방어
+
+        ID2D1Bitmap* bmp = LoadBitmapFromFile(g_pDCRT, path);
+        g_bitmapTable[index] = bmp; // 실패 시 nullptr
+    }
 }
 
 sol::object wrap_json_node(nlohmann::json& j, sol::state_view lua) {
@@ -99,49 +161,19 @@ void register_res(sol::state& lua, const char* name) {
     // 1. 이미지 로드 (캐싱 로직 포함)
     res["image"] = [](std::string path) -> int {
         auto it = g_pathCache.find(path);
-        if (it != g_pathCache.end()) return it->second;
+        if (it != g_pathCache.end())
+            return it->second;
 
-        std::wstring wPath = to_wstring(path);
-
-        // 1. 디코더 생성
-        IWICBitmapDecoder* pDecoder = nullptr;
-        HRESULT hr = g_pWICFactory->CreateDecoderFromFilename(wPath.c_str(), NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder);
-        
-        if (FAILED(hr)) {
-            // [오류 처리] 파일이 없거나 열 수 없는 경우
-            if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) {
-                printf("[Resource Error] File not found: %s\n", path.c_str());
-            }
-            else {
-                printf("[Resource Error] Failed to load '%s' (HRESULT: 0x%08X)\n", path.c_str(), hr);
-            }
-
-            // 프로그램이 죽지 않도록 -1을 반환하거나, 0번(기본 에러 이미지)을 반환
+        ID2D1Bitmap* pBitmap = LoadBitmapFromFile(g_pDCRT, path);
+        if (!pBitmap)
             return -1;
-        }
-        // 2. 첫 번째 프레임 가져오기
-        IWICBitmapFrameDecode* pSource = nullptr;
-        pDecoder->GetFrame(0, &pSource);
-
-        // 3. 포맷 변환 (D2D가 좋아하는 32bppPBGRA로)
-        IWICFormatConverter* pConverter = nullptr;
-        g_pWICFactory->CreateFormatConverter(&pConverter);
-        pConverter->Initialize(pSource, GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, NULL, 0.f, WICBitmapPaletteTypeMedianCut);
-
-        // 4. D2D 비트맵 생성
-        ID2D1Bitmap* pBitmap = nullptr;
-        g_pDCRT->CreateBitmapFromWicBitmap(pConverter, NULL, &pBitmap);
-
-        // 정리
-        pConverter->Release();
-        pSource->Release();
-        pDecoder->Release();
 
         int newID = (int)g_bitmapTable.size();
         g_bitmapTable.push_back(pBitmap);
         g_pathCache[path] = newID;
         return newID;
-    };
+        };
+
 
     // 2. 시스템 폰트 로드
     res["font"] = [](std::string name, float size, sol::optional<int> weight) -> int {

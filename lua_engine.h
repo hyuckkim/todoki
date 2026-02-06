@@ -76,7 +76,17 @@ inline std::wstring to_wstring(const std::string& s) {
     return buf;
 }
 
+
+template <class T>
+inline void SafeRelease(T** ppT) {
+    if (ppT && *ppT) {
+        (*ppT)->Release();
+        *ppT = nullptr;
+    }
+}
+
 void register_draw(sol::state& lua, const char* name);
 void register_input(sol::state& lua, const char* name);
 void register_sys(sol::state& lua, const char* name);
 void register_res(sol::state& lua, const char* name);
+void RebuildAllBitmaps();

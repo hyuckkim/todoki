@@ -57,7 +57,8 @@ void InitLuaEngine(const char* main) {
         sol::lib::table,
         sol::lib::string,
         sol::lib::math,
-        sol::lib::debug
+        sol::lib::debug,
+        sol::lib::utf8
     );
     
     lua["print"] = [](sol::variadic_args args) {
@@ -99,6 +100,7 @@ void InitD2D() {
 
     // DCRT 생성 (실제 사용은 BindDC에서 함)
     g_pD2DFactory->CreateDCRenderTarget(&props, &g_pDCRT);
+    RebuildAllBitmaps();
 }
 void flush_logs() {
     if (g_frameLogBuffer.empty()) return;
@@ -110,8 +112,7 @@ void flush_logs() {
     g_frameLogBuffer.clear();
 }
 void refreshBackBuffer(int w, int h) {
-    if (g_hBmp)
-    {
+    if (g_hBmp) {
         SelectObject(g_hdcMem, g_hBmpOld);
         DeleteObject(g_hBmp);
         g_hBmp = nullptr;
@@ -147,8 +148,8 @@ void refreshBackBuffer(int w, int h) {
 
     g_bufW = w;
     g_bufH = h;
-    RECT rc = { 0, 0, w, h };
     if (g_pDCRT) {
+        RECT rc = { 0, 0, w, h };
         g_pDCRT->BindDC(g_hdcMem, &rc);
     }
 }
@@ -175,6 +176,11 @@ void drawing() {
     CALL_LUA_FUNC(lua, "Draw");
 
     HRESULT hr = g_pDCRT->EndDraw();
+    if (hr == D2DERR_RECREATE_TARGET) {
+        SafeRelease(&g_pDCRT);
+        InitD2D();
+        return;
+    }
 
     // 5. 레이어드 윈도우 갱신 (기존 GDI 로직 그대로 사용)
     RECT winRc; GetWindowRect(g_hwnd, &winRc);
