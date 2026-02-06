@@ -6,9 +6,9 @@ std::vector<ID2D1Bitmap*> g_bitmapTable;
 std::vector<IDWriteTextFormat*> g_fontTable;
 std::vector<std::wstring> g_fontFamilyTable;
 std::map<std::string, int> g_pathCache;
+static std::unordered_map<std::string, std::unique_ptr<nlohmann::json>> g_JsonCache;
+static std::mutex g_JsonMutex;
 
-// sol2에서는 sol::state가 알아서 죽을 때 정리하지만, 
-// GDI+ 객체(new로 생성한 것)들은 명시적으로 지워주는 게 좋습니다.
 void unregisterLuaFunctions() {
     for (auto img : g_bitmapTable) img->Release();
     for (auto font : g_fontTable) font->Release();
@@ -20,49 +20,70 @@ void unregisterLuaFunctions() {
     g_pathCache.clear();
 }
 
+sol::object wrap_json_node(nlohmann::json& j, sol::state_view lua) {
+    if (j.is_structured()) {
+        return sol::make_object<JsonNode>(lua, JsonNode{ &j });
+    }
+    if (j.is_string())  return sol::make_object(lua, j.get<std::string>());
+    if (j.is_number())  return sol::make_object(lua, j.get<double>());
+    if (j.is_boolean()) return sol::make_object(lua, j.get<bool>());
+    return sol::nil;
+}
 struct JsonTask : public ITask {
+    std::string path;
     std::future<nlohmann::json> fuel;
     sol::object result = sol::nil;
 
     bool check(sol::this_state s) override {
         if (isDone) return true;
+
         if (fuel.valid() && fuel.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+            std::lock_guard<std::mutex> lock(g_JsonMutex);
+
+            // 1. 전역 캐시에 데이터 저장
+            g_JsonCache[path] = std::make_unique<nlohmann::json>(fuel.get());
+
+            // 2. 결과 Proxy 객체 미리 생성 (getResult가 매개변수가 없으므로)
             sol::state_view lua(s);
-            result = json_to_lua(fuel.get(), lua); // JSON -> Table 변환
+            result = sol::make_object<JsonNode>(lua, JsonNode{ g_JsonCache[path].get() });
+
             isDone = true;
             return true;
         }
         return false;
     }
 
-    sol::object getResult() override { return result; }
+    sol::object getResult() override {
+        return result;
+    }
 };
-sol::object json_to_lua(const json& j, sol::state_view& lua) {
+void register_json_type(sol::state_view& lua) {
+    lua.new_usertype<JsonNode>("json_node",
+        // 1. 인덱싱 (__index) : data.name 또는 data[1]
+        sol::meta_function::index, [](JsonNode& n, sol::stack_object key, sol::this_state s) -> sol::object {
+            if (!n.node) return sol::nil;
+            auto& j = *(n.node);
+            sol::state_view lua_s(s);
 
-    if (j.is_null()) return sol::nil;
-    if (j.is_boolean()) return sol::make_object(lua, j.get<bool>());
-    if (j.is_number_integer()) return sol::make_object(lua, j.get<long long>());
-    if (j.is_number_float()) return sol::make_object(lua, j.get<double>());
-    if (j.is_string()) return sol::make_object(lua, j.get<std::string>());
-
-    if (j.is_array()) {
-        sol::table obj = lua.create_table();
-        for (int i = 0; i < j.size(); ++i) {
-            // Lua는 인덱스가 1부터 시작하므로 i + 1
-            obj[i + 1] = json_to_lua(j[i], lua);
+            // 문자열 키 접근 (Object)
+            if (key.is<std::string>() && j.is_object()) {
+                auto it = j.find(key.as<std::string>());
+                if (it != j.end()) return wrap_json_node(it.value(), lua_s);
+            }
+            // 숫자 인덱스 접근 (Array)
+            else if (key.is<int>() && j.is_array()) {
+                int idx = key.as<int>() - 1; // 루아 1-based 인덱스 보정
+                if (idx >= 0 && idx < (int)j.size()) {
+                    return wrap_json_node(j[idx], lua_s);
+                }
+            }
+            return sol::nil;
+        },
+        // 2. 크기 확인 (__len) : #data
+        sol::meta_function::length, [](JsonNode& n) {
+            return n.node ? n.node->size() : 0;
         }
-        return obj;
-    }
-
-    if (j.is_object()) {
-        sol::table obj = lua.create_table();
-        for (auto& el : j.items()) {
-            obj[el.key()] = json_to_lua(el.value(), lua);
-        }
-        return obj;
-    }
-
-    return sol::nil;
+    );
 }
 
 void register_res(sol::state& lua, const char* name) {
@@ -71,6 +92,7 @@ void register_res(sol::state& lua, const char* name) {
         "getResult", &ITask::getResult,
         "isDone", sol::readonly(&ITask::isDone)
     );
+    register_json_type(lua);
 
     auto res = lua.create_named_table(name);
 
@@ -201,16 +223,26 @@ void register_res(sol::state& lua, const char* name) {
 
         // 전역 lua 상태를 사용하여 변환
         sol::state_view lua_view(lua);
-        return json_to_lua(j, lua_view);
-        };
+        return wrap_json_node(j, lua);
+        }; 
     res["jsonAsync"] = [](std::string path) -> std::shared_ptr<ITask> {
         auto task = std::make_shared<JsonTask>();
+        task->path = path; // 캐시 키로 사용
+
         task->fuel = std::async(std::launch::async, [path]() {
             std::ifstream file(path);
             nlohmann::json j;
-            if (file.is_open()) file >> j;
+            if (file.is_open()) {
+                try {
+                    file >> j;
+                }
+                catch (...) {
+                    // 파싱 에러 처리 로직 (빈 객체 반환 등)
+                }
+            }
             return j;
             });
-        return task; // JsonTask지만 ITask로 반환
+
+        return task;
         };
 }

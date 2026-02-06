@@ -53,6 +53,10 @@ struct ITask {
 extern int g_clipCount;
 extern std::vector<StateLayer> g_stateStack;
 
+// Lua가 들고 다닐 가벼운 객체
+struct JsonNode {
+    nlohmann::json* node = nullptr;
+};
 inline std::wstring to_wstring(const std::string& s) {
     if (s.empty()) return L"";
 
@@ -71,9 +75,6 @@ inline std::wstring to_wstring(const std::string& s) {
 
     return buf;
 }
-
-// JSON 익스프레션을 sol::object로 변환하는 재귀 함수
-sol::object json_to_lua(const json& j, sol::state_view& lua);
 
 void register_draw(sol::state& lua, const char* name);
 void register_input(sol::state& lua, const char* name);
