@@ -106,7 +106,7 @@ void InitLuaEngine(const char* main) {
             g_printedMessages.insert(full_msg);
 
             // 기존 로그 버퍼에 추가 (앞에 [ONCE] 태그를 붙여주면 더 식별하기 좋음)
-        g_frameLogBuffer.push_back(full_msg);
+            g_frameLogBuffer.push_back(full_msg);
         }
         };
 
@@ -216,6 +216,8 @@ void drawing() {
         if (hr == D2DERR_RECREATE_TARGET) {
             SafeRelease(&g_pDCRT);
             InitD2D();
+            g_bufW = 0;
+            g_bufH = 0;
             return;
         }
     }
@@ -357,6 +359,13 @@ int APIENTRY wWinMain(
             flush_logs();
             if (needReload) {
                 printf("[Win] Reloading Script...\n");
+
+                if (g_pDCRT) { g_pDCRT->Release(); g_pDCRT = nullptr; }
+
+                InitD2D();
+                g_bufW = 0;
+                g_bufH = 0;
+
                 InitLuaEngine(entryFile.c_str());
                 CallLuaFunc(lua, "Init");
                 needReload = false;

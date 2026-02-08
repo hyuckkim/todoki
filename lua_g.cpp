@@ -14,6 +14,7 @@ void register_draw(sol::state& lua, const char* name) {
         sol::constructors<LuaCanvas(float, float)>(),
         "batchBegin", &LuaCanvas::batchBegin,
         "batchEnd", &LuaCanvas::batchEnd,
+        "release", &LuaCanvas::release,
         "color", &LuaCanvas::color,
         "rect", &LuaCanvas::rect,
         "circle", &LuaCanvas::circle,

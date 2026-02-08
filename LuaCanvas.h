@@ -12,10 +12,12 @@ private:
 
 public:
     LuaCanvas(float w, float h);
+    ~LuaCanvas();
 
     // 배치 제어
     void batchBegin();
     void batchEnd();
+    void release(); // 명시적 해제
 
     // 내부 실행 헬퍼
     void execute(std::function<void()> drawFunc);
@@ -31,5 +33,8 @@ public:
         sol::optional<float> sx, sol::optional<float> sy, sol::optional<float> sw, sol::optional<float> sh);
 
     // 메인 화면에 출력
-    void draw(float x, float y);
+    void draw(float x, float y,
+        sol::optional<float> w, sol::optional<float> h,
+        sol::optional<float> sx, sol::optional<float> sy,
+        sol::optional<float> sw, sol::optional<float> sh);
 };

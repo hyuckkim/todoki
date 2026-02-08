@@ -1,4 +1,5 @@
 #include "lua_engine.h"
+#include "LuaJson.h"
 
 // 전역 변수 초기화 (기존 유지)
 Color g_currentColor(255, 255, 255, 255);
@@ -82,176 +83,16 @@ void RebuildAllBitmaps() {
     }
 }
 
-sol::object wrap_json_node(nlohmann::json& j, sol::state_view lua) {
-    if (j.is_structured()) {
-        return sol::make_object<JsonNode>(lua, JsonNode{ &j });
-    }
-    if (j.is_string())  return sol::make_object(lua, j.get<std::string>());
-    if (j.is_number())  return sol::make_object(lua, j.get<double>());
-    if (j.is_boolean()) return sol::make_object(lua, j.get<bool>());
-    return sol::nil;
-}
-struct JsonTask : public ITask {
-    std::string path;
-    std::future<nlohmann::json> fuel;
-    sol::object result = sol::nil;
-
-    bool check(sol::this_state s) override {
-        if (isDone) return true;
-
-        if (fuel.valid() && fuel.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-            std::lock_guard<std::mutex> lock(g_JsonMutex);
-
-            // 1. 전역 캐시에 데이터 저장
-            g_JsonCache[path] = std::make_unique<nlohmann::json>(fuel.get());
-
-            // 2. 결과 Proxy 객체 미리 생성 (getResult가 매개변수가 없으므로)
-            sol::state_view lua(s);
-            result = sol::make_object<JsonNode>(lua, JsonNode{ g_JsonCache[path].get() });
-
-            isDone = true;
-            return true;
-        }
-        return false;
-    }
-
-    sol::object getResult() override {
-        return result;
-    }
-};
-// 반복자(next) 함수 정의
-auto json_next = [](sol::this_state s, JsonNode& n, sol::object key) {
-    sol::state_view lua(s);
-    if (!n.node) return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
-
-    auto& j = *(n.node);
-
-    // 1. 객체(Object) 순회
-    if (j.is_object()) {
-        auto it = j.end();
-        if (key.is<sol::nil_t>()) {
-            it = j.begin();
-        }
-        else if (key.is<std::string>()) {
-            it = j.find(key.as<std::string>());
-            if (it != j.end()) ++it;
-        }
-
-        if (it != j.end()) {
-            return std::make_tuple(sol::make_object(lua, it.key()), wrap_json_node(it.value(), lua));
-        }
-    }
-    // 2. 배열(Array) 순회
-    else if (j.is_array()) {
-        size_t next_idx = 0;
-        if (key.is<sol::nil_t>()) {
-            next_idx = 0;
-        }
-        else if (key.is<double>()) {
-            next_idx = static_cast<size_t>(key.as<double>()); // 루아에서 보낸 index (1-based 기준 그대로가 다음 순서)
-        }
-
-        if (next_idx < j.size()) {
-            return std::make_tuple(sol::make_object(lua, next_idx + 1), wrap_json_node(j[next_idx], lua));
-        }
-    }
-
-    return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
-    };
-
-auto json_ipairs_next = [](sol::this_state s, JsonNode& n, sol::object key) {
-    sol::state_view lua(s);
-    if (!n.node || !n.node->is_array())
-        return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
-
-    auto& j = *(n.node);
-    int next_idx = 0;
-
-    if (key.is<sol::nil_t>()) {
-        next_idx = 0; // 시작
-    }
-    else {
-        next_idx = static_cast<int>(key.as<double>()); // 현재 index 1이면 다음은 인덱스 1(0-based)
-    }
-
-    if (next_idx < (int)j.size()) {
-        return std::make_tuple(
-            sol::make_object(lua, next_idx + 1), // 다음 루아 인덱스
-            wrap_json_node(j[next_idx], lua)     // 값
-        );
-    }
-
-    return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
-    };
-void register_json_type(sol::state_view& lua) {
-    lua.new_usertype<JsonNode>("json_node",
-        // __index: 객체의 키(string) 또는 배열의 인덱스(double/int) 처리
-        sol::meta_function::index, [](JsonNode& n, sol::stack_object key, sol::this_state s) -> sol::object {
-            if (!n.node) return sol::nil;
-            auto& j = *(n.node);
-            sol::state_view lua_s(s);
-
-            if (key.is<std::string>() && j.is_object()) {
-                auto it = j.find(key.as<std::string>());
-                if (it != j.end()) return wrap_json_node(it.value(), lua_s);
-            }
-            // 루아 숫자는 double이므로 double로 체크하는 것이 안전함
-            else if (key.is<double>() && j.is_array()) {
-                int idx = static_cast<int>(key.as<double>()) - 1;
-                if (idx >= 0 && idx < (int)j.size()) {
-                    return wrap_json_node(j[idx], lua_s);
-                }
-            }
-            return sol::nil;
-        },
-        // __len: 표준 루아처럼 객체일 때는 0, 배열일 때만 크기 반환
-        sol::meta_function::length, [](JsonNode& n) {
-            if (n.node && n.node->is_array()) {
-                return n.node->size();
-            }
-            return (size_t)0; // 객체(Map)는 루아 표준에서 # 연산시 0임
-        },
-
-        // __pairs: 객체와 배열 모두 순회
-        sol::meta_function::pairs, [](sol::this_state s, JsonNode& n) {
-            sol::state_view lua(s);
-            return std::make_tuple(sol::make_object(lua, json_next), n, sol::nil);
-        },
-
-        sol::meta_function::ipairs, [](sol::this_state s, JsonNode& n, sol::object key) {
-            sol::state_view lua(s);
-            auto& j = *(n.node);
-            int next_idx = 0;
-
-            if (key.is<sol::nil_t>()) {
-                next_idx = 0;
-            }
-            else {
-                next_idx = static_cast<int>(key.as<double>());
-            }
-            return std::make_tuple(
-                sol::make_object(lua, next_idx + 1), // JsonNode가 아닌 순수 number
-                wrap_json_node(j[next_idx], lua)     // Value는 JsonNode여도 됨
-            );
-        },
-        sol::meta_function::to_string, [](JsonNode& n) {
-            if (n.node) return n.node->dump(); // JSON을 문자열로 직렬화
-            return std::string("nil node");
-            }
-    );
-}
-
 void register_res(sol::state& lua, const char* name) {
+    // 공통 Task 타입 등록
     lua.new_usertype<ITask>("Task",
         "check", &ITask::check,
         "getResult", &ITask::getResult,
         "isDone", sol::readonly(&ITask::isDone)
     );
-    register_json_type(lua);
 
+    // 이미지/폰트 등 기존 로직 등록...
     auto res = lua.create_named_table(name);
-
-    // 1. 이미지 로드 (캐싱 로직 포함)
     res["image"] = [](std::string path) -> int {
         auto it = g_pathCache.find(path);
         if (it != g_pathCache.end())
@@ -329,45 +170,7 @@ void register_res(sol::state& lua, const char* name) {
         return id;
         };
 
-    // 4. 드디어 대망의 JSON 로더 (여기에 꽂으시면 됩니다)
-    res["json"] = [&lua](std::string path) -> sol::object {
-        std::ifstream file(path);
-        if (!file.is_open()) {
-            printf("[Resource Error] Failed to open JSON file: %s\n", path.c_str());
-            return sol::nil;
-        }
-
-        json j;
-        try {
-            file >> j;
-        }
-        catch (const json::parse_error& e) {
-            printf("[JSON Error] Parse error: %s\n", e.what());
-            return sol::nil;
-        }
-
-        // 전역 lua 상태를 사용하여 변환
-        sol::state_view lua_view(lua);
-        return wrap_json_node(j, lua);
-        }; 
-    res["jsonAsync"] = [](std::string path) -> std::shared_ptr<ITask> {
-        auto task = std::make_shared<JsonTask>();
-        task->path = path; // 캐시 키로 사용
-
-        task->fuel = std::async(std::launch::async, [path]() {
-            std::ifstream file(path);
-            nlohmann::json j;
-            if (file.is_open()) {
-                try {
-                    file >> j;
-                }
-                catch (...) {
-                    // 파싱 에러 처리 로직 (빈 객체 반환 등)
-                }
-            }
-            return j;
-            });
-
-        return task;
-        };
+    // 분리한 JSON 모듈 등록 호출
+    sol::state_view lua_view(lua);
+    register_json_module(lua_view, name);
 }
