@@ -165,8 +165,10 @@
     <ClCompile Include="..\..\Cache\lua-5.4.8\src\lvm.c" />
     <ClCompile Include="..\..\Cache\lua-5.4.8\src\lzio.c" />
     <ClCompile Include="DrawCore.cpp" />
+    <ClCompile Include="engine_log.cpp" />
     <ClCompile Include="LuaCanvas.cpp" />
     <ClCompile Include="LuaJson.cpp" />
+    <ClCompile Include="lua_bind.cpp" />
     <ClCompile Include="lua_g.cpp" />
     <ClCompile Include="lua_input.cpp" />
     <ClCompile Include="lua_res.cpp" />
@@ -202,6 +204,7 @@
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lundump.h" />
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lvm.h" />
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lzio.h" />
+    <ClInclude Include="engine_log.h" />
     <ClInclude Include="LuaCanvas.h" />
     <ClInclude Include="LuaJson.h" />
     <ClInclude Include="lua_engine.h" />

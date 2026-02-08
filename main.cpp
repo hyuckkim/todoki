@@ -1,4 +1,5 @@
 #include "lua_engine.h"
+#include "engine_log.h"
 #include <filesystem>
 #include <unordered_set>
 namespace fs = std::filesystem;
@@ -60,10 +61,8 @@ std::string to_string(const std::wstring& wstr) {
     return strTo;
 }
 
-std::vector<std::string> g_frameLogBuffer;
 void InitLuaEngine(const char* main) {
-    g_frameLogBuffer.clear();
-    g_last_lua_error = "";
+    ResetLuaLogState();
 
     lua = sol::state();
     lua.open_libraries(
@@ -76,37 +75,7 @@ void InitLuaEngine(const char* main) {
         sol::lib::utf8,
         sol::lib::coroutine
     );
-    
-    lua["print"] = [](sol::variadic_args args) {
-        std::string full_msg = "";
-
-        sol::function to_string = lua["tostring"];
-
-        for (auto v : args) {
-            std::string s = to_string(v.get<sol::object>());
-            full_msg += s + "  ";
-        }
-
-        g_frameLogBuffer.push_back(full_msg);
-        };
-    lua["printOnce"] = [](sol::variadic_args args, sol::this_state s) {
-        std::string full_msg = "";
-        sol::state_view lua(s);
-        sol::function to_string = lua["tostring"];
-
-        for (auto v : args) {
-            std::string s_val = to_string(v.get<sol::object>());
-            full_msg += s_val + "  ";
-        }
-
-        // 이 메시지가 이전에 출력된 적이 없는 경우에만 실행
-        if (g_printedMessages.find(full_msg) == g_printedMessages.end()) {
-            g_printedMessages.insert(full_msg);
-
-            // 기존 로그 버퍼에 추가 (앞에 [ONCE] 태그를 붙여주면 더 식별하기 좋음)
-            g_frameLogBuffer.push_back(full_msg);
-        }
-        };
+    BindLuaLogging(lua);
 
     register_sys(lua, "sys");
     register_input(lua, "is");
@@ -135,15 +104,6 @@ void InitD2D() {
     // DCRT 생성 (실제 사용은 BindDC에서 함)
     g_pD2DFactory->CreateDCRenderTarget(&props, &g_pDCRT);
     RebuildAllBitmaps();
-}
-void flush_logs() {
-    if (g_frameLogBuffer.empty()) return;
-
-    for (const auto& log : g_frameLogBuffer) {
-        printf("%s\n", log.c_str());
-    }
-
-    g_frameLogBuffer.clear();
 }
 void refreshBackBuffer(int w, int h) {
     if (g_hBmp) {
@@ -354,7 +314,7 @@ int APIENTRY wWinMain(
         }
         else {
             drawing();
-            flush_logs();
+            FlushLogs();
             if (needReload) {
                 printf("[Win] Reloading Script...\n");
 
