@@ -62,8 +62,6 @@ std::string to_string(const std::wstring& wstr) {
 
 std::vector<std::string> g_frameLogBuffer;
 void InitLuaEngine(const char* main) {
-    g_stateStack.clear();
-    g_clipCount = 0;
     g_frameLogBuffer.clear();
     g_last_lua_error = "";
 

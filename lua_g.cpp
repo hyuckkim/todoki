@@ -9,6 +9,8 @@ std::vector<StateLayer> g_stateStack;
 
 void register_draw(sol::state& lua, const char* name) {
     g_pDCRT->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
+    g_stateStack.clear();
+    g_clipCount = 0;
 
     lua.new_usertype<LuaCanvas>("Canvas",
         sol::constructors<LuaCanvas(float, float)>(),
