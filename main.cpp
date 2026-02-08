@@ -1,10 +1,10 @@
 #include "lua_engine.h"
 #include "engine_log.h"
+#include "engine_lua.h"
 #include <filesystem>
 #include <unordered_set>
 namespace fs = std::filesystem;
 
-sol::state lua;
 ULONGLONG lastTick = 0;
 int gDrawW = 0, gDrawH = 0;
 static std::unordered_set<std::string> g_printedMessages;
@@ -22,37 +22,6 @@ int     g_bufW = 0;
 int     g_bufH = 0;
 std::string entryFile = "main.lua";
 
-#define SOL_ALL_SAFETIES_ON 1
-
-static std::string g_last_lua_error = "";
-template<typename... Args>
-void CallLuaFunc(sol::state& lua, const std::string& func_name, Args&&... args) {
-    sol::protected_function f = lua[func_name];
-
-    if (!f.valid()) {
-        // 함수가 존재하지 않을 때의 처리 (선택 사항)
-        return;
-    }
-
-    auto result = f(std::forward<Args>(args)...);
-
-    if (!result.valid()) {
-        try {
-            sol::error err = result;
-            std::string current_error = err.what();
-
-            if (g_last_lua_error != current_error) {
-                printf("[LUA ERROR] %s: %s\n", func_name.c_str(), current_error.c_str());
-                g_last_lua_error = current_error;
-            }
-        } catch (const std::exception& e) {
-            printf("[CRITICAL ERROR] Failed to parse Lua error: %s\n", e.what());
-        } catch (...) {
-            printf("[CRITICAL ERROR] Unknown exception during Lua error handling\n");
-        }
-    }
-}
-
 std::string to_string(const std::wstring& wstr) {
     if (wstr.empty()) return "";
     int size_needed = WideCharToMultiByte(CP_UTF8, 0, &wstr[0], (int)wstr.size(), NULL, 0, NULL, NULL);
@@ -61,35 +30,7 @@ std::string to_string(const std::wstring& wstr) {
     return strTo;
 }
 
-void InitLuaEngine(const char* main) {
-    ResetLuaLogState();
 
-    lua = sol::state();
-    lua.open_libraries(
-        sol::lib::base,
-        sol::lib::package,
-        sol::lib::table,
-        sol::lib::string,
-        sol::lib::math,
-        sol::lib::debug,
-        sol::lib::utf8,
-        sol::lib::coroutine
-    );
-    BindLuaLogging(lua);
-
-    register_sys(lua, "sys");
-    register_input(lua, "is");
-    register_draw(lua, "g");
-    register_res(lua, "res");
-
-    auto load_result = lua.script_file(main, sol::script_pass_on_error);
-    if (!load_result.valid()) {
-        sol::error err = load_result;
-        printf("[LUA ERROR] %s\n", err.what());
-        return;
-    }
-    printf("Lua Engine Initialized / Reloaded via sol2.\n");
-}
 
 void InitD2D() {
     D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, &g_pD2DFactory);
@@ -166,8 +107,8 @@ void drawing() {
 
 
     // 3. Lua Update / Draw 호출
-    CallLuaFunc(lua, "Update", dt);
-    CallLuaFunc(lua, "Draw");
+    Call("Update", dt);
+    Call("Draw");
 
     HRESULT hr = g_pDCRT->EndDraw();
     if (hr != S_OK) {
@@ -204,7 +145,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         PostQuitMessage(0);
         break;
     case WM_KEYDOWN:
-        CallLuaFunc(lua, "OnKeyDown", (int)wParam);
+        Call("OnKeyDown", (int)wParam);
 
 #ifdef _DEBUG
         if (wParam == VK_F5) {
@@ -214,23 +155,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
 
     case WM_KEYUP:
-        CallLuaFunc(lua, "OnKeyUp", (int)wParam);
+        Call("OnKeyUp", (int)wParam);
         break;
 
     case WM_LBUTTONDOWN:
-        CallLuaFunc(lua, "OnMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        Call("OnMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
 
     case WM_LBUTTONUP:
-        CallLuaFunc(lua, "OnMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        Call("OnMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
 
     case WM_RBUTTONDOWN:
-        CallLuaFunc(lua, "OnRightMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        Call("OnRightMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
 
     case WM_RBUTTONUP:
-        CallLuaFunc(lua, "OnRightMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        Call("OnRightMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
 
     default:
@@ -277,12 +218,14 @@ int APIENTRY wWinMain(
     }
 
     InitD2D();
+    ResetLuaLogState();
     InitLuaEngine(entryFile.c_str());
 
     // 2. 루아로부터 받아온 설정값으로 윈도우 생성 (g_L이 준비되었으므로 안전)
-    gDrawW = lua.get_or("ScreenWidth", 800);
-    gDrawH = lua.get_or("ScreenHeight", 600);
-    std::string title = lua.get_or<std::string>("WindowTitle", "Default");
+    LuaConfig config = LoadLuaConfig();
+    gDrawW = config.width;
+    gDrawH = config.height;
+    std::string title = config.title;
     std::wstring titleW = to_wstring(title);
 
     const int TARGET_FPS = 60;
@@ -302,7 +245,7 @@ int APIENTRY wWinMain(
     lastTick = GetTickCount64();
     ShowWindow(g_hwnd, nCmdShow);
 
-    CallLuaFunc(lua, "Init");
+    Call("Init");
     MSG msg;
     while (true) {
         ULONGLONG frameStart = GetTickCount64(); // 시작 시간 기록
@@ -325,7 +268,7 @@ int APIENTRY wWinMain(
                 g_bufH = 0;
 
                 InitLuaEngine(entryFile.c_str());
-                CallLuaFunc(lua, "Init");
+                Call("Init");
                 needReload = false;
             }
             // 프레임 제어
