@@ -1,4 +1,6 @@
 #include "lua_engine.h"
+#include <filesystem>
+namespace fs = std::filesystem;
 
 sol::state lua;
 ULONGLONG lastTick = 0;
@@ -17,23 +19,36 @@ int     g_bufW = 0;
 int     g_bufH = 0;
 std::string entryFile = "main.lua";
 
+#define SOL_ALL_SAFETIES_ON 1
+
 static std::string g_last_lua_error = "";
-#define CALL_LUA_FUNC(lua_state, func_name, ...) \
-    { \
-        sol::protected_function f = lua_state[func_name]; \
-        if (f.valid()) { \
-            auto result = f(__VA_ARGS__); \
-            if (!result.valid()) { \
-                sol::error err = result; \
-                std::string current_error = err.what(); \
-                \
-                if (g_last_lua_error != current_error) { \
-                    printf("[LUA ERROR] %s: %s\n", func_name, current_error.c_str()); \
-                    g_last_lua_error = current_error; \
-                } \
-            } \
-        } \
+template<typename... Args>
+void CallLuaFunc(sol::state& lua, const std::string& func_name, Args&&... args) {
+    sol::protected_function f = lua[func_name];
+
+    if (!f.valid()) {
+        // 함수가 존재하지 않을 때의 처리 (선택 사항)
+        return;
     }
+
+    auto result = f(std::forward<Args>(args)...);
+
+    if (!result.valid()) {
+        try {
+            sol::error err = result;
+            std::string current_error = err.what();
+
+            if (g_last_lua_error != current_error) {
+                printf("[LUA ERROR] %s: %s\n", func_name.c_str(), current_error.c_str());
+                g_last_lua_error = current_error;
+            }
+        } catch (const std::exception& e) {
+            printf("[CRITICAL ERROR] Failed to parse Lua error: %s\n", e.what());
+        } catch (...) {
+            printf("[CRITICAL ERROR] Unknown exception during Lua error handling\n");
+        }
+    }
+}
 
 std::string to_string(const std::wstring& wstr) {
     if (wstr.empty()) return "";
@@ -172,14 +187,16 @@ void drawing() {
 
 
     // 3. Lua Update / Draw 호출
-    CALL_LUA_FUNC(lua, "Update", dt);
-    CALL_LUA_FUNC(lua, "Draw");
+    CallLuaFunc(lua, "Update", dt);
+    CallLuaFunc(lua, "Draw");
 
     HRESULT hr = g_pDCRT->EndDraw();
-    if (hr == D2DERR_RECREATE_TARGET) {
-        SafeRelease(&g_pDCRT);
-        InitD2D();
-        return;
+    if (hr != S_OK) {
+        if (hr == D2DERR_RECREATE_TARGET) {
+            SafeRelease(&g_pDCRT);
+            InitD2D();
+            return;
+        }
     }
 
     // 5. 레이어드 윈도우 갱신 (기존 GDI 로직 그대로 사용)
@@ -190,10 +207,13 @@ void drawing() {
 
     BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
 
-    UpdateLayeredWindow(
+    BOOL ok = UpdateLayeredWindow(
         g_hwnd, g_hdcScreen, &ptWinPos, &sizeWin,
         g_hdcMem, &ptSrc, 0, &blend, ULW_ALPHA
     );
+    if (!ok) {
+        DWORD err = GetLastError(); printf("UpdateLayeredWindow failed, error=%lu\n", err);
+    }
 }
 
 bool needReload = false;
@@ -203,7 +223,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         PostQuitMessage(0);
         break;
     case WM_KEYDOWN:
-		CALL_LUA_FUNC(lua, "OnKeyDown", (int)wParam);
+        CallLuaFunc(lua, "OnKeyDown", (int)wParam);
 
 #ifdef _DEBUG
         if (wParam == VK_F5) {
@@ -213,23 +233,23 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         break;
 
     case WM_KEYUP:
-		CALL_LUA_FUNC(lua, "OnKeyUp", (int)wParam);
+        CallLuaFunc(lua, "OnKeyUp", (int)wParam);
         break;
 
     case WM_LBUTTONDOWN:
-        CALL_LUA_FUNC(lua, "OnMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        CallLuaFunc(lua, "OnMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
 
     case WM_LBUTTONUP:
-        CALL_LUA_FUNC(lua, "OnMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        CallLuaFunc(lua, "OnMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
 
     case WM_RBUTTONDOWN:
-        CALL_LUA_FUNC(lua, "OnRightMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        CallLuaFunc(lua, "OnRightMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
 
     case WM_RBUTTONUP:
-        CALL_LUA_FUNC(lua, "OnRightMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
+        CallLuaFunc(lua, "OnRightMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
 
     default:
@@ -248,8 +268,8 @@ int APIENTRY wWinMain(
     ULONG_PTR gdiplusToken;
     GdiplusStartup(&gdiplusToken, &gdiplusStartupInput, nullptr);
 
-    HRESULT hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
-    hr = CoInitialize(NULL); // WIC와 COM 사용을 위해 필수
+    HRESULT hr = CoInitialize(NULL); // WIC와 COM 사용을 위해 필수
+    hr = DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
     hr = CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_pWICFactory));
 #ifdef _DEBUG
     if (AllocConsole()) {
@@ -270,13 +290,18 @@ int APIENTRY wWinMain(
         printf("[Engine] Entry script changed to: %s\n", entryFile.c_str());
     }
 
+    if (!fs::exists(entryFile)) {
+        printf("[Engine Error] Entry script '%s' not found!\n", entryFile.c_str());
+        return -1;
+    }
+
     InitD2D();
     InitLuaEngine(entryFile.c_str());
 
     // 2. 루아로부터 받아온 설정값으로 윈도우 생성 (g_L이 준비되었으므로 안전)
     gDrawW = lua.get_or("ScreenWidth", 800);
     gDrawH = lua.get_or("ScreenHeight", 600);
-    std::string title = lua.get_or<std::string>("WindowTitle", "Fantasy Wagon");
+    std::string title = lua.get_or<std::string>("WindowTitle", "Default");
     std::wstring titleW = to_wstring(title);
 
     const int TARGET_FPS = 60;
@@ -296,7 +321,7 @@ int APIENTRY wWinMain(
     lastTick = GetTickCount64();
     ShowWindow(g_hwnd, nCmdShow);
 
-	CALL_LUA_FUNC(lua, "Init");
+    CallLuaFunc(lua, "Init");
     MSG msg;
     while (true) {
         ULONGLONG frameStart = GetTickCount64(); // 시작 시간 기록
@@ -312,7 +337,7 @@ int APIENTRY wWinMain(
             if (needReload) {
                 printf("[Win] Reloading Script...\n");
                 InitLuaEngine(entryFile.c_str());
-                CALL_LUA_FUNC(lua, "Init");
+                CallLuaFunc(lua, "Init");
                 needReload = false;
             }
             // 프레임 제어

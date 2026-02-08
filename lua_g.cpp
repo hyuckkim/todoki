@@ -1,8 +1,9 @@
-﻿#include "lua_engine.h"
+#include "lua_engine.h"
 
 ID2D1SolidColorBrush* g_pSolidBrush = nullptr; // 전역 브러시 하나를 색상 변경 시마다 업데이트
 D2D1_COLOR_F g_d2dColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 현재 색상 저장용
 int g_clipCount = 0;
+float g_strokeWidth = 1.0;
 std::vector<StateLayer> g_stateStack;
 
 void register_draw(sol::state& lua, const char* name) {
@@ -11,17 +12,74 @@ void register_draw(sol::state& lua, const char* name) {
     // 1. 테이블 생성 (기존 lua_newtable + lua_setglobal 대용)
     auto g = lua.create_named_table(name);
 
-    // 2. Rect 그리기
     g["rect"] = [](float x, float y, float w, float h) {
         if (g_pDCRT && g_pSolidBrush) {
             g_pSolidBrush->SetColor(g_d2dColor); // 그리기 직전 색상 동기화
             g_pDCRT->FillRectangle(D2D1::RectF(x, y, x + w, y + h), g_pSolidBrush);
         }
     };
+    g["circle"] = [](float x, float y, float radius) {
+        if (!g_pDCRT || !g_pSolidBrush) return;
+        D2D1_ELLIPSE ellipse = D2D1::Ellipse(D2D1::Point2F(x, y), radius, radius);
+        g_pDCRT->FillEllipse(ellipse, g_pSolidBrush);
+        };
+    g["polygon"] = [](sol::table vertices) {
+        if (!g_pDCRT || !g_pSolidBrush || vertices.size() < 6) return;
 
-    // 3. 색상 설정 (알파값 선택적 처리)
-    // sol::optional을 쓰면 루아에서 인자를 안 보냈을 때 기본값을 줄 수 있습니다.
-    g["color"] = [](int r, int g, int b, sol::optional<int> a) {
+        // 1. 임시 Geometry 생성 (성능을 위해 추후 캐싱 필요)
+        ComPtr<ID2D1PathGeometry> pPathGeometry;
+        g_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+
+        ComPtr<ID2D1GeometrySink> pSink;
+        pPathGeometry->Open(&pSink);
+
+        // 2. 루아 테이블에서 첫 번째 점 읽기
+        pSink->BeginFigure(
+            D2D1::Point2F(vertices[1].get<float>(), vertices[2].get<float>()),
+            D2D1_FIGURE_BEGIN_FILLED
+        );
+
+        // 3. 나머지 점들 연결
+        for (size_t i = 3; i < vertices.size(); i += 2) {
+            pSink->AddLine(D2D1::Point2F(vertices[i].get<float>(), vertices[i + 1].get<float>()));
+        }
+
+        pSink->EndFigure(D2D1_FIGURE_END_CLOSED);
+        pSink->Close();
+
+        // 4. 현재 설정된 전역 브러시로 채우기
+        g_pDCRT->FillGeometry(pPathGeometry.Get(), g_pSolidBrush);
+        };
+    g["polyline"] = [](sol::table vertices, sol::optional<bool> is_closed) {
+        if (!g_pDCRT || !g_pSolidBrush || vertices.size() < 4) return;
+        bool closed = is_closed.value_or(false);
+
+        ComPtr<ID2D1PathGeometry> pPathGeometry;
+        g_pD2DFactory->CreatePathGeometry(&pPathGeometry);
+
+        ComPtr<ID2D1GeometrySink> pSink;
+        pPathGeometry->Open(&pSink);
+
+        // Fill과 달리 선만 긋는 것이므로 굳이 FILLED를 고집할 필요는 없으나, 
+        // 폐쇄된 다각형 테두리라면 D2D1_FIGURE_BEGIN_FILLED가 안전합니다.
+        pSink->BeginFigure(
+            D2D1::Point2F(vertices[1].get<float>(), vertices[2].get<float>()),
+            D2D1_FIGURE_BEGIN_FILLED
+        );
+
+        for (size_t i = 3; i < vertices.size(); i += 2) {
+            pSink->AddLine(D2D1::Point2F(vertices[i].get<float>(), vertices[i + 1].get<float>()));
+        }
+        pSink->EndFigure(closed ? D2D1_FIGURE_END_CLOSED : D2D1_FIGURE_END_OPEN);
+        pSink->Close();
+
+        // FillGeometry 대신 DrawGeometry 사용
+        g_pDCRT->DrawGeometry(pPathGeometry.Get(), g_pSolidBrush, g_strokeWidth);
+        }; 
+    g["lineWidth"] = [](float width) {
+        g_strokeWidth = width;
+        };
+    g["color"] = [](float r, float g, float b, sol::optional<float> a) {
         g_d2dColor = D2D1::ColorF(r / 255.0f, g / 255.0f, b / 255.0f, a.value_or(255) / 255.0f);
 
         if (g_pDCRT) {
@@ -37,9 +95,9 @@ void register_draw(sol::state& lua, const char* name) {
         };
 
     // 4. 텍스트 그리기
-    g["text"] = [](int fontId, std::string text, float x, float y) {
+    g["text"] = [](int fontId, std::string name, float x, float y) {
         if (fontId >= 0 && fontId < (int)g_fontTable.size() && g_pDCRT) {
-            std::wstring wText = to_wstring(text);
+            std::wstring wText = to_wstring(name);
             IDWriteTextFormat* pFormat = g_fontTable[fontId];
 
             // D2D는 텍스트를 그릴 영역(Rect)을 지정해야 합니다.
@@ -129,7 +187,7 @@ void register_draw(sol::state& lua, const char* name) {
     g["push"] = []() {
         D2D1_MATRIX_3X2_F current;
         g_pDCRT->GetTransform(&current);
-        g_stateStack.push_back({ current, g_clipCount });
+        g_stateStack.push_back({ current, g_clipCount, g_strokeWidth });
         };
 
     g["pop"] = []() {
@@ -143,6 +201,7 @@ void register_draw(sol::state& lua, const char* name) {
             g_pDCRT->PopAxisAlignedClip();
             g_clipCount--;
         }
+        g_strokeWidth = last.strokeWidth;
 
         // 2. 변환 행렬 복구
         g_pDCRT->SetTransform(last.matrix);

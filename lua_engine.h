@@ -17,6 +17,8 @@
 #include <d2d1.h>
 #include <dwrite.h>
 #include <wincodec.h> // 이미지 로딩을 위한 WIC
+#include <wrl/client.h>
+#include <comdef.h>
 
 #pragma comment(lib, "d2d1.lib")
 #pragma comment(lib, "dwrite.lib")
@@ -24,6 +26,7 @@
 #pragma comment(lib, "windowscodecs.lib")
 using namespace Gdiplus;
 using json = nlohmann::json;
+using Microsoft::WRL::ComPtr;
 
 extern ID2D1Factory* g_pD2DFactory;
 extern ID2D1DCRenderTarget* g_pDCRT;
@@ -41,6 +44,7 @@ extern std::map<std::string, int> g_pathCache;
 struct StateLayer {
     D2D1_MATRIX_3X2_F matrix;
     int clipDepth; // 해당 push 시점의 클립 깊이
+    float strokeWidth;
 };
 
 struct ITask {

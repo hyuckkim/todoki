@@ -119,32 +119,125 @@ struct JsonTask : public ITask {
         return result;
     }
 };
+// 반복자(next) 함수 정의
+auto json_next = [](sol::this_state s, JsonNode& n, sol::object key) {
+    sol::state_view lua(s);
+    if (!n.node) return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
+
+    auto& j = *(n.node);
+
+    // 1. 객체(Object) 순회
+    if (j.is_object()) {
+        auto it = j.end();
+        if (key.is<sol::nil_t>()) {
+            it = j.begin();
+        }
+        else if (key.is<std::string>()) {
+            it = j.find(key.as<std::string>());
+            if (it != j.end()) ++it;
+        }
+
+        if (it != j.end()) {
+            return std::make_tuple(sol::make_object(lua, it.key()), wrap_json_node(it.value(), lua));
+        }
+    }
+    // 2. 배열(Array) 순회
+    else if (j.is_array()) {
+        size_t next_idx = 0;
+        if (key.is<sol::nil_t>()) {
+            next_idx = 0;
+        }
+        else if (key.is<double>()) {
+            next_idx = static_cast<size_t>(key.as<double>()); // 루아에서 보낸 index (1-based 기준 그대로가 다음 순서)
+        }
+
+        if (next_idx < j.size()) {
+            return std::make_tuple(sol::make_object(lua, next_idx + 1), wrap_json_node(j[next_idx], lua));
+        }
+    }
+
+    return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
+    };
+
+auto json_ipairs_next = [](sol::this_state s, JsonNode& n, sol::object key) {
+    sol::state_view lua(s);
+    if (!n.node || !n.node->is_array())
+        return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
+
+    auto& j = *(n.node);
+    int next_idx = 0;
+
+    if (key.is<sol::nil_t>()) {
+        next_idx = 0; // 시작
+    }
+    else {
+        next_idx = static_cast<int>(key.as<double>()); // 현재 index 1이면 다음은 인덱스 1(0-based)
+    }
+
+    if (next_idx < (int)j.size()) {
+        return std::make_tuple(
+            sol::make_object(lua, next_idx + 1), // 다음 루아 인덱스
+            wrap_json_node(j[next_idx], lua)     // 값
+        );
+    }
+
+    return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
+    };
 void register_json_type(sol::state_view& lua) {
     lua.new_usertype<JsonNode>("json_node",
-        // 1. 인덱싱 (__index) : data.name 또는 data[1]
+        // __index: 객체의 키(string) 또는 배열의 인덱스(double/int) 처리
         sol::meta_function::index, [](JsonNode& n, sol::stack_object key, sol::this_state s) -> sol::object {
             if (!n.node) return sol::nil;
             auto& j = *(n.node);
             sol::state_view lua_s(s);
 
-            // 문자열 키 접근 (Object)
             if (key.is<std::string>() && j.is_object()) {
                 auto it = j.find(key.as<std::string>());
                 if (it != j.end()) return wrap_json_node(it.value(), lua_s);
             }
-            // 숫자 인덱스 접근 (Array)
-            else if (key.is<int>() && j.is_array()) {
-                int idx = key.as<int>() - 1; // 루아 1-based 인덱스 보정
+            // 루아 숫자는 double이므로 double로 체크하는 것이 안전함
+            else if (key.is<double>() && j.is_array()) {
+                int idx = static_cast<int>(key.as<double>()) - 1;
                 if (idx >= 0 && idx < (int)j.size()) {
                     return wrap_json_node(j[idx], lua_s);
                 }
             }
             return sol::nil;
         },
-        // 2. 크기 확인 (__len) : #data
+        // __len: 표준 루아처럼 객체일 때는 0, 배열일 때만 크기 반환
         sol::meta_function::length, [](JsonNode& n) {
-            return n.node ? n.node->size() : 0;
-        }
+            if (n.node && n.node->is_array()) {
+                return n.node->size();
+            }
+            return (size_t)0; // 객체(Map)는 루아 표준에서 # 연산시 0임
+        },
+
+        // __pairs: 객체와 배열 모두 순회
+        sol::meta_function::pairs, [](sol::this_state s, JsonNode& n) {
+            sol::state_view lua(s);
+            return std::make_tuple(sol::make_object(lua, json_next), n, sol::nil);
+        },
+
+        sol::meta_function::ipairs, [](sol::this_state s, JsonNode& n, sol::object key) {
+            sol::state_view lua(s);
+            auto& j = *(n.node);
+            int next_idx = 0;
+
+            if (key.is<sol::nil_t>()) {
+                next_idx = 0;
+            }
+            else {
+                next_idx = static_cast<int>(key.as<double>());
+            }
+            return std::make_tuple(
+                sol::make_object(lua, next_idx + 1), // JsonNode가 아닌 순수 number
+                wrap_json_node(j[next_idx], lua)     // Value는 JsonNode여도 됨
+            );
+        },
+        sol::meta_function::to_string, [](JsonNode& n) {
+            if (n.node) return n.node->dump(); // JSON을 문자열로 직렬화
+            return std::string("nil node");
+            }
     );
 }
 
