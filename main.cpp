@@ -1,10 +1,12 @@
 #include "lua_engine.h"
 #include <filesystem>
+#include <unordered_set>
 namespace fs = std::filesystem;
 
 sol::state lua;
 ULONGLONG lastTick = 0;
 int gDrawW = 0, gDrawH = 0;
+static std::unordered_set<std::string> g_printedMessages;
 
 ID2D1Factory* g_pD2DFactory = nullptr;
 ID2D1DCRenderTarget* g_pDCRT = nullptr;
@@ -73,7 +75,8 @@ void InitLuaEngine(const char* main) {
         sol::lib::string,
         sol::lib::math,
         sol::lib::debug,
-        sol::lib::utf8
+        sol::lib::utf8,
+        sol::lib::coroutine
     );
     
     lua["print"] = [](sol::variadic_args args) {
@@ -87,6 +90,24 @@ void InitLuaEngine(const char* main) {
         }
 
         g_frameLogBuffer.push_back(full_msg);
+        };
+    lua["printOnce"] = [](sol::variadic_args args, sol::this_state s) {
+        std::string full_msg = "";
+        sol::state_view lua(s);
+        sol::function to_string = lua["tostring"];
+
+        for (auto v : args) {
+            std::string s_val = to_string(v.get<sol::object>());
+            full_msg += s_val + "  ";
+        }
+
+        // 이 메시지가 이전에 출력된 적이 없는 경우에만 실행
+        if (g_printedMessages.find(full_msg) == g_printedMessages.end()) {
+            g_printedMessages.insert(full_msg);
+
+            // 기존 로그 버퍼에 추가 (앞에 [ONCE] 태그를 붙여주면 더 식별하기 좋음)
+        g_frameLogBuffer.push_back(full_msg);
+        }
         };
 
     register_sys(lua, "sys");
