@@ -47,6 +47,6 @@ namespace DrawCore {
     void Image(ID2D1RenderTarget* rt, ID2D1Bitmap* bmp, float dx, float dy, float dw, float dh, float sx, float sy, float sw, float sh) {
         D2D1_RECT_F destRect = D2D1::RectF(dx, dy, dx + dw, dy + dh);
         D2D1_RECT_F srcRect = D2D1::RectF(sx, sy, sx + sw, sy + sh);
-        rt->DrawBitmap(bmp, destRect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, srcRect);
+        rt->DrawBitmap(bmp, destRect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR, srcRect);
     }
 }

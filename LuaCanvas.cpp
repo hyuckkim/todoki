@@ -1,15 +1,34 @@
 #include "LuaCanvas.h"
 
-// 외부 전역 변수 참조 (엔진 구조에 맞게 조정하세요)
 extern ID2D1DCRenderTarget* g_pDCRT;
 extern std::vector<IDWriteTextFormat*> g_fontTable;
 extern std::vector<ID2D1Bitmap*> g_bitmapTable;
 
+#ifndef SafeRelease
+#define SafeRelease(p) { if(p) { (p)->Release(); (p) = nullptr; } }
+#endif
 LuaCanvas::LuaCanvas(float w, float h) {
     // 1. 호환되는 렌더 타겟 생성
-    g_pDCRT->CreateCompatibleRenderTarget(D2D1::SizeF(w, h), &pRT);
-    // 2. 이 캔버스 전용 브러시 생성
-    pRT->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f), &pCanvasBrush);
+    HRESULT hr = g_pDCRT->CreateCompatibleRenderTarget(D2D1::SizeF(w, h), &pRT);
+    if (SUCCEEDED(hr)) {
+        // 2. 이 캔버스 전용 브러시 생성
+        pRT->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f), &pCanvasBrush);
+    }
+}
+
+void LuaCanvas::release() {
+    if (isBatching && pRT) {
+        pRT->EndDraw();
+        isBatching = false;
+    }
+
+    pCanvasBrush.Reset();
+    pRT.Reset();
+}
+
+// 4. 소멸자 (Lua GC에 의해 호출됨)
+LuaCanvas::~LuaCanvas() {
+    release();
 }
 
 void LuaCanvas::batchBegin() {
@@ -63,12 +82,40 @@ void LuaCanvas::image(int id, float dx, float dy, sol::optional<float> dw, sol::
         });
 }
 
-void LuaCanvas::draw(float x, float y) {
+void LuaCanvas::draw(float x, float y,
+    sol::optional<float> w, sol::optional<float> h,
+    sol::optional<float> sx, sol::optional<float> sy,
+    sol::optional<float> sw, sol::optional<float> sh) {
     if (isBatching) batchEnd();
+
     ComPtr<ID2D1Bitmap> pBitmap;
-    pRT->GetBitmap(&pBitmap); // 그려진 내용 비트맵으로 추출
-    if (pBitmap) {
-        // 메인 화면(g_pDCRT)에 캔버스 비트맵을 그림
-        g_pDCRT->DrawBitmap(pBitmap.Get(), D2D1::RectF(x, y, x + pBitmap->GetSize().width, y + pBitmap->GetSize().height));
+    HRESULT hr = pRT->GetBitmap(&pBitmap);
+
+    if (SUCCEEDED(hr) && pBitmap) {
+        D2D1_SIZE_F originalSize = pBitmap->GetSize();
+
+        // 1. 소스 영역 결정 (이미지의 어디를 얼마만큼 잘라낼 것인가)
+        float sourceX = sx.value_or(0.0f);
+        float sourceY = sy.value_or(0.0f);
+        float sourceW = sw.value_or(originalSize.width - sourceX);
+        float sourceH = sh.value_or(originalSize.height - sourceY);
+
+        D2D1_RECT_F srcRect = D2D1::RectF(sourceX, sourceY, sourceX + sourceW, sourceY + sourceH);
+
+        // 2. 목적지 영역 결정 (화면 어디에 어떤 크기로 그릴 것인가)
+        // w, h가 없으면 잘라낸 소스 크기(sourceW, sourceH) 그대로 그립니다.
+        float drawW = w.value_or(sourceW);
+        float drawH = h.value_or(sourceH);
+
+        D2D1_RECT_F destRect = D2D1::RectF(x, y, x + drawW, y + drawH);
+
+        // 3. 출력 (픽셀 아트를 위해 NEAREST_NEIGHBOR)
+        g_pDCRT->DrawBitmap(
+            pBitmap.Get(),
+            destRect,
+            1.0f,
+            D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+            &srcRect
+        );
     }
 }
