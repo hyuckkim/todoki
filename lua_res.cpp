@@ -68,6 +68,7 @@ void unregisterLuaFunctions() {
     g_fontTable.clear();
     g_bitmapTable.clear();
     g_pathCache.clear();
+    g_JsonCache.clear();
 }
 
 void RebuildAllBitmaps() {
