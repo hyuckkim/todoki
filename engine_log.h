@@ -2,7 +2,7 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <sol/sol.hpp>
+#include "sol.h"
 
 // Lua 바인딩용
 void BindLuaLogging(sol::state& lua);

@@ -1,5 +1,5 @@
+#include "sol.h"
 #include "engine_log.h"
-#include <sol/sol.hpp>
 
 void BindLuaLogging(sol::state& lua) {
     lua["print"] = [](sol::variadic_args args, sol::this_state s) {
