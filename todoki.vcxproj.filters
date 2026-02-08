@@ -132,6 +132,12 @@
     <ClCompile Include="lua_sys.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="LuaCanvas.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="DrawCore.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lparser.h">
@@ -219,6 +225,9 @@
       <Filter>헤더 파일\lua</Filter>
     </ClInclude>
     <ClInclude Include="lua_engine.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="LuaCanvas.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
   </ItemGroup>

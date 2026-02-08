@@ -16,6 +16,7 @@
 #include <map>
 #include <d2d1.h>
 #include <dwrite.h>
+#include <functional>
 #include <wincodec.h> // 이미지 로딩을 위한 WIC
 #include <wrl/client.h>
 #include <comdef.h>
@@ -53,6 +54,20 @@ struct ITask {
     virtual sol::object getResult() = 0;
     bool isDone = false;
 };
+
+namespace DrawCore {
+    // 도형
+    void Rect(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, float x, float y, float w, float h, bool fill = true);
+    void Circle(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, float x, float y, float radius, bool fill = true);
+    void Polyline(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, sol::table vertices, bool closed, float strokeWidth);
+    void Polygon(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, sol::table vertices);
+
+    // 텍스트 (FontTable 관리 필요)
+    void Text(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, IDWriteTextFormat* pFormat, const std::string& text, float x, float y);
+
+    // 이미지
+    void Image(ID2D1RenderTarget* rt, ID2D1Bitmap* bmp, float dx, float dy, float dw, float dh, float sx, float sy, float sw, float sh);
+}
 
 extern int g_clipCount;
 extern std::vector<StateLayer> g_stateStack;
