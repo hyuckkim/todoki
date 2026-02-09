@@ -27,7 +27,6 @@ bool JsonTask::check(sol::this_state s) {
         try {
             g_JsonCache[path] = std::make_unique<json>(fuel.get());
             sol::state_view lua(s);
-            result = sol::make_object(lua, JsonNode{ g_JsonCache[path].get() });
             isDone = true;
             return true;
         }
@@ -38,13 +37,14 @@ bool JsonTask::check(sol::this_state s) {
     return false;
 }
 
-sol::object JsonTask::getResult() {
-    return result;
+sol::object JsonTask::getResult(sol::this_state s) {
+    return wrap_json_node(*g_JsonCache[path], s);
 }
 
 // --- 모듈 등록 함수 ---
 void register_json_module(sol::state_view& lua, const char* namespace_name) {
-    g_JsonCache.clear();
+    std::unordered_map<std::string, std::unique_ptr<json>> empty;
+    g_JsonCache.swap(empty);
     // 1. JsonNode 유저타입 등록
     lua.new_usertype<JsonNode>("json_node",
         sol::meta_function::index, [](JsonNode& n, sol::stack_object key, sol::this_state s) -> sol::object {

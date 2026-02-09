@@ -7,7 +7,7 @@ using json = nlohmann::json;
 struct ITask {
     virtual ~ITask() = default;
     virtual bool check(sol::this_state s) = 0;
-    virtual sol::object getResult() = 0;
+    virtual sol::object getResult(sol::this_state s) = 0;
     bool isDone = false;
 };
 
@@ -15,10 +15,10 @@ struct ITask {
 struct JsonTask : public ITask {
     std::string path;
     std::future<nlohmann::json> fuel;
-    sol::object result = sol::nil;
+    JsonTask* result = nullptr;
 
     bool check(sol::this_state s) override;
-    sol::object getResult() override;
+    sol::object getResult(sol::this_state s) override;
 };
 
 // 외부(lua_engine.cpp 등)에서 호출할 등록 함수
