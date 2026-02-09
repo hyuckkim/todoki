@@ -1,7 +1,7 @@
 #include "util.h"
-#include "lua_engine.h"
 #include "LuaJson.h"
 #include "engine_graphic.h"
+#include "sol.h"
 #include <gdiplus.h>
 
 // 전역 변수 초기화 (기존 유지)

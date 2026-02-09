@@ -1,6 +1,11 @@
-#include "lua_engine.h"
+#include <windows.h>
+#include <wrl.h>
+#include <wrl/client.h>
+using Microsoft::WRL::ComPtr;
+
 #include "engine_graphic.h"
 #include "util.h"
+#include "sol.h"
 
 namespace DrawCore {
     void Rect(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, float x, float y, float w, float h, bool fill) {

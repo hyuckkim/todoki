@@ -4,7 +4,9 @@
 #include <d2d1.h>
 #include <wincodec.h>
 #include <dwrite.h>
+#include <vector>
 #include <map>
+#include <string>
 
 void InitCom();
 void InitD2D();

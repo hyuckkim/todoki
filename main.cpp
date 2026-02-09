@@ -1,5 +1,4 @@
 #include "util.h"
-#include "lua_engine.h"
 #include "engine_log.h"
 #include "engine_lua.h"
 #include "engine_graphic.h"

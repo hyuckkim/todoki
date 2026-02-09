@@ -214,7 +214,7 @@
     <ClInclude Include="entry.h" />
     <ClInclude Include="LuaCanvas.h" />
     <ClInclude Include="LuaJson.h" />
-    <ClInclude Include="lua_engine.h" />
+    <ClInclude Include="nloh_json.h" />
     <ClInclude Include="sol.h" />
     <ClInclude Include="util.h" />
   </ItemGroup>
