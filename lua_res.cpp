@@ -1,14 +1,15 @@
+#include "util.h"
 #include "lua_engine.h"
 #include "LuaJson.h"
+#include "engine_graphic.h"
+#include <gdiplus.h>
 
 // 전역 변수 초기화 (기존 유지)
-Color g_currentColor(255, 255, 255, 255);
+Gdiplus::Color g_currentColor(255, 255, 255, 255);
 std::vector<ID2D1Bitmap*> g_bitmapTable;
 std::map<std::string, int> g_pathCache;
 std::vector<IDWriteTextFormat*> g_fontTable;
 std::vector<std::wstring> g_fontFamilyTable;
-static std::unordered_map<std::string, std::unique_ptr<nlohmann::json>> g_JsonCache;
-static std::mutex g_JsonMutex;
 
 ID2D1Bitmap* LoadBitmapFromFile(
     ID2D1DCRenderTarget* rt,

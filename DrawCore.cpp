@@ -1,4 +1,6 @@
 #include "lua_engine.h"
+#include "engine_graphic.h"
+#include "util.h"
 
 namespace DrawCore {
     void Rect(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, float x, float y, float w, float h, bool fill) {

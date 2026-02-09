@@ -141,6 +141,24 @@
     <ClCompile Include="LuaJson.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="engine_log.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="engine_lua.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="lua_bind.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="engine_graphic.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="util.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
+    <ClCompile Include="entry.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lparser.h">
@@ -236,11 +254,26 @@
     <ClInclude Include="LuaJson.h">
       <Filter>헤더 파일</Filter>
     </ClInclude>
+    <ClInclude Include="engine_log.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="engine_lua.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="sol.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="util.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="engine_graphic.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
+    <ClInclude Include="entry.h">
+      <Filter>헤더 파일</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\Cache\lua-5.4.8\src\Makefile">
-      <Filter>소스 파일\lua</Filter>
-    </None>
     <None Include=".gitignore" />
   </ItemGroup>
 </Project>

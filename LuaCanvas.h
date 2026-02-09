@@ -1,5 +1,8 @@
 #pragma once
-#include "lua_engine.h"
+#include <d2d1.h>
+#include <wrl.h>
+#include <wrl/client.h>
+#include "sol.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -38,3 +41,23 @@ public:
         sol::optional<float> sx, sol::optional<float> sy,
         sol::optional<float> sw, sol::optional<float> sh);
 };
+
+struct StateLayer {
+    D2D1_MATRIX_3X2_F matrix;
+    int clipDepth; // 해당 push 시점의 클립 깊이
+    float strokeWidth;
+};
+
+namespace DrawCore {
+    // 도형
+    void Rect(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, float x, float y, float w, float h, bool fill = true);
+    void Circle(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, float x, float y, float radius, bool fill = true);
+    void Polyline(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, sol::table vertices, bool closed, float strokeWidth);
+    void Polygon(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, sol::table vertices);
+
+    // 텍스트 (FontTable 관리 필요)
+    void Text(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, IDWriteTextFormat* pFormat, const std::string& text, float x, float y);
+
+    // 이미지
+    void Image(ID2D1RenderTarget* rt, ID2D1Bitmap* bmp, float dx, float dy, float dw, float dh, float sx, float sy, float sw, float sh);
+}

@@ -44,6 +44,7 @@ sol::object JsonTask::getResult() {
 
 // --- 모듈 등록 함수 ---
 void register_json_module(sol::state_view& lua, const char* namespace_name) {
+    g_JsonCache.clear();
     // 1. JsonNode 유저타입 등록
     lua.new_usertype<JsonNode>("json_node",
         sol::meta_function::index, [](JsonNode& n, sol::stack_object key, sol::this_state s) -> sol::object {

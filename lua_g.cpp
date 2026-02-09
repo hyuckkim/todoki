@@ -1,5 +1,7 @@
-#include "lua_engine.h"
+#include <dwrite.h>
 #include "LuaCanvas.h"
+#include "engine_graphic.h"
+#include "util.h"
 
 ID2D1SolidColorBrush* g_pSolidBrush = nullptr; // 전역 브러시 하나를 색상 변경 시마다 업데이트
 D2D1_COLOR_F g_d2dColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 현재 색상 저장용
@@ -9,6 +11,8 @@ std::vector<StateLayer> g_stateStack;
 
 void register_draw(sol::state& lua, const char* name) {
     g_pDCRT->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
+    g_stateStack.clear();
+    g_clipCount = 0;
 
     lua.new_usertype<LuaCanvas>("Canvas",
         sol::constructors<LuaCanvas(float, float)>(),
