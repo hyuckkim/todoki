@@ -12,7 +12,7 @@ std::vector<IDWriteTextFormat*> g_fontTable;
 std::vector<std::wstring> g_fontFamilyTable;
 
 ID2D1Bitmap* LoadBitmapFromFile(
-    ID2D1DCRenderTarget* rt,
+    ID2D1DeviceContext* rt,
     const std::string& path
 ) {
     std::wstring wPath = to_wstring(path);
@@ -79,7 +79,7 @@ void RebuildAllBitmaps() {
         if (index < 0 || index >= (int)g_bitmapTable.size())
             continue; // 방어
 
-        ID2D1Bitmap* bmp = LoadBitmapFromFile(g_pDCRT, path);
+        ID2D1Bitmap* bmp = LoadBitmapFromFile(g_pD2DDC, path);
         g_bitmapTable[index] = bmp; // 실패 시 nullptr
     }
 }
@@ -99,7 +99,7 @@ void register_res(sol::state& lua, const char* name) {
         if (it != g_pathCache.end())
             return it->second;
 
-        ID2D1Bitmap* pBitmap = LoadBitmapFromFile(g_pDCRT, path);
+        ID2D1Bitmap* pBitmap = LoadBitmapFromFile(g_pD2DDC, path);
         if (!pBitmap)
             return -1;
 

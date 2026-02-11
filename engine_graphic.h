@@ -1,27 +1,40 @@
 #pragma once
 
 #include <windows.h>
-#include <d2d1.h>
-#include <wincodec.h>
+#include <d2d1_1.h>
 #include <dwrite.h>
-#include <vector>
-#include <map>
+#include <wincodec.h>
 #include <string>
+#include <vector>
+#include <wrl/client.h>
 
-void InitCom();
-void InitD2D();
-void InitWindow(WNDPROC WndProc, HINSTANCE hInstance, const wchar_t* title);
-void PreDraw();
-void PostDraw();
-void ReleaseGraphic();
+// Microsoft::WRL::ComPtr을 사용하기 쉽게 별칭 설정
+using Microsoft::WRL::ComPtr;
 
+// --- 전역 설정 및 상태 ---
+extern int gDrawW;
+extern int gDrawH;
 extern HWND g_hwnd;
-extern ID2D1Factory* g_pD2DFactory;
-extern ID2D1DCRenderTarget* g_pDCRT;
+
+extern std::vector<IDWriteTextFormat*> g_fontTable;
+extern std::vector<ID2D1Bitmap*> g_bitmapTable;
+
+// --- 핵심 엔진 컴포넌트 (Extern 선언) ---
+// D2D1Factory1 이상이어야 DirectComposition과 연동 가능합니다.
+extern ID2D1Factory1* g_pD2DFactory;
+extern ID2D1DeviceContext* g_pD2DDC;
 extern IDWriteFactory* g_pDWriteFactory;
 extern IWICImagingFactory* g_pWICFactory;
 
-extern int gDrawW, gDrawH;
-extern std::vector<ID2D1Bitmap*> g_bitmapTable;
-extern std::vector<IDWriteTextFormat*> g_fontTable;
-extern std::map<std::string, int> g_pathCache;
+// --- 초기화 및 제어 함수 ---
+void InitCom();
+void InitD2D();
+void InitWindow(WNDPROC WndProc, HINSTANCE hInstance, const wchar_t* title);
+
+// 루프에서 호출되는 핵심 함수
+void UpdateMousePassthrough();
+void PreDraw();
+void PostDraw();
+void ReleaseGraphic();
+void RecreateDevice();
+void ResizeWindow(UINT width, UINT height);

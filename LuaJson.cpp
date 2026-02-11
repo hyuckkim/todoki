@@ -17,6 +17,67 @@ sol::object wrap_json_node(json& j, sol::state_view lua) {
     return sol::nil;
 }
 
+// JSON -> Lua Table 변환 (json_node가 아님!)
+sol::object json_to_lua_table(const json& j, sol::state_view lua) {
+    if (j.is_null()) return sol::nil;
+    if (j.is_boolean()) return sol::make_object(lua, j.get<bool>());
+    if (j.is_number()) return sol::make_object(lua, j.get<double>());
+    if (j.is_string()) return sol::make_object(lua, j.get<std::string>());
+
+    if (j.is_array()) {
+        sol::table t = lua.create_table();
+        for (size_t i = 0; i < j.size(); ++i) {
+            t[i + 1] = json_to_lua_table(j[i], lua); // Lua 1-based index
+        }
+        return t;
+    }
+    if (j.is_object()) {
+        sol::table t = lua.create_table();
+        for (auto& el : j.items()) {
+            t[el.key()] = json_to_lua_table(el.value(), lua);
+        }
+        return t;
+    }
+    return sol::nil;
+}
+
+// Lua Table -> JSON 변환 (json_node가 아님!)
+json lua_table_to_json(sol::object obj) {
+    if (obj.is<sol::nil_t>()) return nullptr;
+    if (obj.is<bool>()) return obj.as<bool>();
+    if (obj.is<double>()) return obj.as<double>();
+    if (obj.is<std::string>()) return obj.as<std::string>();
+
+    if (obj.is<sol::table>()) {
+        sol::table t = obj.as<sol::table>();
+
+        // 배열인지 객체인지 판별 (첫 번째 키가 1이면 배열로 추측)
+        bool is_array = false;
+        t.for_each([&is_array](sol::object key, sol::object value) {
+            if (key.is<int>() && key.as<int>() == 1) is_array = true;
+            return false; // 중단
+            });
+
+        if (is_array) {
+            json j = json::array();
+            for (size_t i = 1; i <= t.size(); ++i) {
+                j.push_back(lua_table_to_json(t[i]));
+            }
+            return j;
+        }
+        else {
+            json j = json::object();
+            t.for_each([&j](sol::object key, sol::object value) {
+                if (key.is<std::string>()) {
+                    j[key.as<std::string>()] = lua_table_to_json(value);
+                }
+                });
+            return j;
+        }
+    }
+    return nullptr;
+}
+
 // --- JsonTask 구현 ---
 bool JsonTask::check(sol::this_state s) {
     if (isDone) return true;
@@ -118,5 +179,27 @@ void register_json_module(sol::state_view& lua, const char* namespace_name) {
             return j;
             });
         return task;
+        };
+
+    res["loadTable"] = [](std::string path, sol::this_state s) -> sol::object {
+        std::ifstream file(path);
+        if (!file.is_open()) return sol::nil;
+        try {
+            json j;
+            file >> j;
+            return json_to_lua_table(j, s);
+        }
+        catch (...) { return sol::nil; }
+        };
+
+    res["saveTable"] = [](std::string path, sol::object table) -> bool {
+        std::ofstream file(path);
+        if (!file.is_open()) return false;
+        try {
+            json j = lua_table_to_json(table);
+            file << j.dump(4); // 4칸 들여쓰기 포함
+            return true;
+        }
+        catch (...) { return false; }
         };
 }

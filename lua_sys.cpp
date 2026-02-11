@@ -11,6 +11,7 @@ void register_sys(sol::state& lua, const char* name) {
             SetWindowPos(g_hwnd, NULL, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
             gDrawW = w;
             gDrawH = h;
+            ResizeWindow(w, h);
         }
     };
 
@@ -63,6 +64,51 @@ void register_sys(sol::state& lua, const char* name) {
         SetCursor(hCursor);
         };
 
+    s["setTopmost"] = [](bool topmost) {
+        if (g_hwnd) {
+            // HWND_TOPMOST: 항상 위 (-1)
+            // HWND_NOTOPMOST: 항상 위 해제 (-2)
+            HWND hWndInsertAfter = topmost ? HWND_TOPMOST : HWND_NOTOPMOST;
+
+            SetWindowPos(g_hwnd, hWndInsertAfter, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+        };
+
+    s["getMonitors"] = [](sol::this_state ts) {
+        sol::state_view lua(ts);
+        sol::table monitorList = lua.create_table();
+
+        // 모니터를 순회하며 정보를 수집할 콜백 구조체/람다
+        auto callback = [](HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) -> BOOL {
+            auto& list = *reinterpret_cast<sol::table*>(dwData);
+
+            MONITORINFO mi = { sizeof(mi) };
+            if (GetMonitorInfo(hMonitor, &mi)) {
+                sol::state_view lua = list.lua_state();
+                sol::table info = lua.create_table();
+
+                // rcMonitor: 모니터 전체 해상도
+                // rcWork: 작업 표시줄을 제외한 실제 사용 가능 영역
+                info["x"] = mi.rcMonitor.left;
+                info["y"] = mi.rcMonitor.top;
+                info["w"] = mi.rcMonitor.right - mi.rcMonitor.left;
+                info["h"] = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+                info["workX"] = mi.rcWork.left;
+                info["workY"] = mi.rcWork.top;
+                info["workW"] = mi.rcWork.right - mi.rcWork.left;
+                info["workH"] = mi.rcWork.bottom - mi.rcWork.top;
+
+                list.add(info);
+            }
+            return TRUE;
+            };
+
+        EnumDisplayMonitors(NULL, NULL, (MONITORENUMPROC)+callback, (LPARAM)&monitorList);
+
+        return monitorList;
+        };
     // 7. 엔진 종료
     s["quit"] = []() {
         PostQuitMessage(0);

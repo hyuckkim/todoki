@@ -1,5 +1,5 @@
-#include "lua_engine.h"
 #include "engine_graphic.h"
+#include "sol.h"
 #include <tuple>
 
 void register_input(sol::state& lua, const char* name) {

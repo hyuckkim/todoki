@@ -1,15 +1,12 @@
 #include "LuaCanvas.h"
-
-extern ID2D1DCRenderTarget* g_pDCRT;
-extern std::vector<IDWriteTextFormat*> g_fontTable;
-extern std::vector<ID2D1Bitmap*> g_bitmapTable;
+#include "engine_graphic.h"
 
 #ifndef SafeRelease
 #define SafeRelease(p) { if(p) { (p)->Release(); (p) = nullptr; } }
 #endif
 LuaCanvas::LuaCanvas(float w, float h) {
     // 1. 호환되는 렌더 타겟 생성
-    HRESULT hr = g_pDCRT->CreateCompatibleRenderTarget(D2D1::SizeF(w, h), &pRT);
+    HRESULT hr = g_pD2DDC->CreateCompatibleRenderTarget(D2D1::SizeF(w, h), &pRT);
     if (SUCCEEDED(hr)) {
         // 2. 이 캔버스 전용 브러시 생성
         pRT->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f), &pCanvasBrush);
@@ -110,7 +107,7 @@ void LuaCanvas::draw(float x, float y,
         D2D1_RECT_F destRect = D2D1::RectF(x, y, x + drawW, y + drawH);
 
         // 3. 출력 (픽셀 아트를 위해 NEAREST_NEIGHBOR)
-        g_pDCRT->DrawBitmap(
+        g_pD2DDC->DrawBitmap(
             pBitmap.Get(),
             destRect,
             1.0f,

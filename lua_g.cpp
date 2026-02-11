@@ -10,7 +10,7 @@ float g_strokeWidth = 1.0;
 std::vector<StateLayer> g_stateStack;
 
 void register_draw(sol::state& lua, const char* name) {
-    g_pDCRT->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
+    g_pD2DDC->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
     g_stateStack.clear();
     g_clipCount = 0;
 
@@ -37,24 +37,24 @@ void register_draw(sol::state& lua, const char* name) {
         };
 
     g["rect"] = [](float x, float y, float w, float h) {
-        DrawCore::Rect(g_pDCRT, g_pSolidBrush, x, y, w, h);
+        DrawCore::Rect(g_pD2DDC, g_pSolidBrush, x, y, w, h);
         };
 
     g["circle"] = [](float x, float y, float r) {
-        DrawCore::Circle(g_pDCRT, g_pSolidBrush, x, y, r);
+        DrawCore::Circle(g_pD2DDC, g_pSolidBrush, x, y, r);
         };
 
     g["polyline"] = [](sol::table v, sol::optional<bool> c) {
-        DrawCore::Polyline(g_pDCRT, g_pSolidBrush, v, c.value_or(false), g_strokeWidth);
+        DrawCore::Polyline(g_pD2DDC, g_pSolidBrush, v, c.value_or(false), g_strokeWidth);
         };
 
     g["polygon"] = [](sol::table v) {
-        DrawCore::Polygon(g_pDCRT, g_pSolidBrush, v);
+        DrawCore::Polygon(g_pD2DDC, g_pSolidBrush, v);
         };
 
     g["text"] = [](int fontId, std::string name, float x, float y) {
         if (fontId >= 0 && fontId < (int)g_fontTable.size())
-            DrawCore::Text(g_pDCRT, g_pSolidBrush, g_fontTable[fontId], name, x, y);
+            DrawCore::Text(g_pD2DDC, g_pSolidBrush, g_fontTable[fontId], name, x, y);
         };
 
     g["image"] = [](int id, float dx, float dy, sol::optional<float> dw, sol::optional<float> dh,
@@ -68,14 +68,14 @@ void register_draw(sol::state& lua, const char* name) {
 
             // Flip 처리는 Matrix 변환이 필요하므로 Core 호출 전후로 처리
             D2D1_MATRIX_3X2_F old;
-            g_pDCRT->GetTransform(&old);
+            g_pD2DDC->GetTransform(&old);
             if (flipX.value_or(false)) {
-                g_pDCRT->SetTransform(D2D1::Matrix3x2F::Scale(-1.0f, 1.0f, D2D1::Point2F(dx + _dw / 2.0f, dy + _dh / 2.0f)) * old);
+                g_pD2DDC->SetTransform(D2D1::Matrix3x2F::Scale(-1.0f, 1.0f, D2D1::Point2F(dx + _dw / 2.0f, dy + _dh / 2.0f)) * old);
             }
 
-            DrawCore::Image(g_pDCRT, bmp, dx, dy, _dw, _dh, sx.value_or(0), sy.value_or(0), sw.value_or(size.width), sh.value_or(size.height));
+            DrawCore::Image(g_pD2DDC, bmp, dx, dy, _dw, _dh, sx.value_or(0), sy.value_or(0), sw.value_or(size.width), sh.value_or(size.height));
 
-            if (flipX.value_or(false)) g_pDCRT->SetTransform(old);
+            if (flipX.value_or(false)) g_pD2DDC->SetTransform(old);
         };
     g["lineWidth"] = [](float width) {
         g_strokeWidth = width;
@@ -83,10 +83,10 @@ void register_draw(sol::state& lua, const char* name) {
     g["color"] = [](float r, float g, float b, sol::optional<float> a) {
         g_d2dColor = D2D1::ColorF(r / 255.0f, g / 255.0f, b / 255.0f, a.value_or(255) / 255.0f);
 
-        if (g_pDCRT) {
+        if (g_pD2DDC) {
             if (g_pSolidBrush == nullptr) {
                 // 브러시가 처음일 때만 생성
-                g_pDCRT->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
+                g_pD2DDC->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
             }
             else {
                 // 이미 있으면 색상만 변경 (이게 훨씬 빠릅니다)
@@ -116,13 +116,13 @@ void register_draw(sol::state& lua, const char* name) {
     };
 
     g["clip"] = [](float x, float y, float w, float h) {
-        g_pDCRT->PushAxisAlignedClip(D2D1::RectF(x, y, x + w, y + h), D2D1_ANTIALIAS_MODE_ALIASED);
+        g_pD2DDC->PushAxisAlignedClip(D2D1::RectF(x, y, x + w, y + h), D2D1_ANTIALIAS_MODE_ALIASED);
         g_clipCount++;
         };
 
     g["push"] = []() {
         D2D1_MATRIX_3X2_F current;
-        g_pDCRT->GetTransform(&current);
+        g_pD2DDC->GetTransform(&current);
         g_stateStack.push_back({ current, g_clipCount, g_strokeWidth });
         };
 
@@ -134,31 +134,31 @@ void register_draw(sol::state& lua, const char* name) {
 
         // 1. push했던 시점보다 더 많이 쌓인 클립들을 모두 해제
         while (g_clipCount > last.clipDepth) {
-            g_pDCRT->PopAxisAlignedClip();
+            g_pD2DDC->PopAxisAlignedClip();
             g_clipCount--;
         }
         g_strokeWidth = last.strokeWidth;
 
         // 2. 변환 행렬 복구
-        g_pDCRT->SetTransform(last.matrix);
+        g_pD2DDC->SetTransform(last.matrix);
         };
 
     // 3. 이동 (Translate)
     g["translate"] = [](float x, float y) {
         D2D1_MATRIX_3X2_F current, next;
-        g_pDCRT->GetTransform(&current);
+        g_pD2DDC->GetTransform(&current);
         next = current * D2D1::Matrix3x2F::Translation(x, y);
-        g_pDCRT->SetTransform(next);
+        g_pD2DDC->SetTransform(next);
         };
 
     // 4. 확대/축소 (Scale)
     g["scale"] = [](float sx, float sy, sol::optional<float> ox, sol::optional<float> oy) {
         D2D1_MATRIX_3X2_F current, next;
-        g_pDCRT->GetTransform(&current);
+        g_pD2DDC->GetTransform(&current);
 
         // 중심점(ox, oy)이 주어지면 그 지점을 기준으로 확대, 아니면 (0,0) 기준
         D2D1_POINT_2F center = D2D1::Point2F(ox.value_or(0.0f), oy.value_or(0.0f));
         next = current * D2D1::Matrix3x2F::Scale(sx, sy, center);
-        g_pDCRT->SetTransform(next);
+        g_pD2DDC->SetTransform(next);
         };
 }

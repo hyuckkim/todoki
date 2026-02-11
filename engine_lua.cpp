@@ -8,6 +8,8 @@ static std::string g_last_lua_error = "";
 void InitLuaEngine(const char* entry) {
 
     lua = sol::state();
+    lua.collect_garbage();
+
     lua.open_libraries(
         sol::lib::base,
         sol::lib::package,
@@ -18,12 +20,7 @@ void InitLuaEngine(const char* entry) {
         sol::lib::utf8,
         sol::lib::coroutine
     );
-    BindLuaLogging(lua);
 
-    register_sys(lua, "sys");
-    register_input(lua, "is");
-    register_draw(lua, "g");
-    register_res(lua, "res");
 
     auto load_result = lua.script_file(entry, sol::script_pass_on_error);
     if (!load_result.valid()) {
@@ -32,6 +29,13 @@ void InitLuaEngine(const char* entry) {
         return;
     }
     printf("Lua Engine Initialized / Reloaded via sol2.\n");
+}
+void RegisterLuaLibs() {
+    BindLuaLogging(lua);
+    register_sys(lua, "sys");
+    register_input(lua, "is");
+    register_draw(lua, "g");
+    register_res(lua, "res");
 }
 
 LuaConfig LoadLuaConfig() {

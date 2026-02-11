@@ -8,10 +8,30 @@
 
 ULONGLONG lastTick = 0;
 
+bool needReload = false;
+bool g_isDrawing = false;
+
+
+void Reload() {
+    printf("[Win] Reloading Script...\n");
+
+    unregisterLuaFunctions();
+    InitLuaEngine(GetEntryFile());
+    RegisterLuaLibs();
+
+    Call("Init");
+    needReload = false;
+}
+
 void drawing() {
+    if (needReload) {
+        Reload();
+        needReload = false;
+    }
     ULONGLONG now = GetTickCount64();
     double dt = double(now - lastTick);
     lastTick = now;
+    UpdateMousePassthrough();
     Call("Update", dt);
 
     PreDraw();
@@ -19,18 +39,6 @@ void drawing() {
     PostDraw();
 }
 
-bool needReload = false;
-void Reload() {
-    printf("[Win] Reloading Script...\n");
-
-    if (g_pDCRT) { g_pDCRT->Release(); g_pDCRT = nullptr; }
-
-    InitD2D();
-
-    InitLuaEngine(GetEntryFile());
-    Call("Init");
-    needReload = false;
-}
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_DESTROY:
@@ -45,7 +53,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
         }
 #endif
         break;
-
     case WM_KEYUP:
         Call("OnKeyUp", (int)wParam);
         break;
@@ -92,25 +99,24 @@ int APIENTRY wWinMain(
     if (res != S_OK) {
         return -1;
     }
-
-    InitD2D();
     ResetLuaLogState();
     InitLuaEngine(GetEntryFile());
-
     LuaConfig config = LoadLuaConfig();
+
     gDrawW = config.width;
     gDrawH = config.height;
-    std::string title = config.title;
-    std::wstring titleW = to_wstring(title);
+    std::wstring titleW = to_wstring(config.title);
+
+    InitWindow(WndProc, hInstance, titleW.c_str());
+    InitD2D();
 
     const int TARGET_FPS = 60;
     const int FRAME_DELAY = 1000 / TARGET_FPS;
 
-    InitWindow(WndProc, hInstance, titleW.c_str());
-
     lastTick = GetTickCount64();
     ShowWindow(g_hwnd, nCmdShow);
 
+    RegisterLuaLibs();
     Call("Init");
     MSG msg;
     while (true) {
@@ -124,7 +130,6 @@ int APIENTRY wWinMain(
         else {
             drawing();
             FlushLogs();
-            if (needReload) Reload();
 
             // 프레임 제어
             ULONGLONG frameTime = GetTickCount64() - frameStart;
@@ -133,6 +138,7 @@ int APIENTRY wWinMain(
             }
         }
     }
+
     ReleaseGraphic();
     return 0;
 }
