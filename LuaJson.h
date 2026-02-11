@@ -15,7 +15,7 @@ struct ITask {
 struct JsonTask : public ITask {
     std::string path;
     std::future<nlohmann::json> fuel;
-    JsonTask* result = nullptr;
+    std::shared_ptr<json> result;
 
     bool check(sol::this_state s) override;
     sol::object getResult(sol::this_state s) override;
@@ -25,8 +25,14 @@ struct JsonTask : public ITask {
 void register_json_module(sol::state_view& lua, const char* namespace_name = "res");
 
 // 헬퍼 함수: JSON 노드를 루아 객체(숫자, 문자열, 혹은 JsonNode)로 변환
-sol::object wrap_json_node(nlohmann::json& j, sol::state_view lua);
+sol::object wrap_json_node(std::shared_ptr<json> root, json* current, sol::state_view lua);
 
 struct JsonNode {
-    nlohmann::json* node = nullptr;
+    std::shared_ptr<json> data; // 전체 JSON 데이터 보존
+    json* node;                 // 현재 가리키는 특정 노드 (내부 포인터)
+
+    // 생성자: 루트 노드용
+    JsonNode(std::shared_ptr<json> j) : data(j), node(j.get()) {}
+    // 생성자: 하위 노드용 (부모의 데이터를 공유)
+    JsonNode(std::shared_ptr<json> d, json* n) : data(d), node(n) {}
 };

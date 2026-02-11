@@ -15,3 +15,6 @@ void FlushLogs();
 // Lua 에러 기록
 void LogLuaError(const std::string& func, const std::string& msg);
 void ResetLuaLogState();
+
+// 오브젝트 보고
+void ReportDXGILiveObjects();

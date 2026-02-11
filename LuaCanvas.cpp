@@ -65,13 +65,13 @@ void LuaCanvas::polygon(sol::table vertices) {
 
 void LuaCanvas::text(int fontId, std::string name, float x, float y) {
     if (fontId < 0 || fontId >= g_fontTable.size()) return;
-    execute([&]() { DrawCore::Text(pRT.Get(), pCanvasBrush.Get(), g_fontTable[fontId], name, x, y); });
+    execute([&]() { DrawCore::Text(pRT.Get(), pCanvasBrush.Get(), g_fontTable[fontId].Get(), name, x, y); });
 }
 
 void LuaCanvas::image(int id, float dx, float dy, sol::optional<float> dw, sol::optional<float> dh,
     sol::optional<float> sx, sol::optional<float> sy, sol::optional<float> sw, sol::optional<float> sh) {
     if (id < 0 || id >= g_bitmapTable.size()) return;
-    ID2D1Bitmap* bmp = g_bitmapTable[id];
+    ID2D1Bitmap* bmp = g_bitmapTable[id].Get();
     auto s = bmp->GetSize();
     execute([&]() {
         DrawCore::Image(pRT.Get(), bmp, dx, dy, dw.value_or(s.width), dh.value_or(s.height),

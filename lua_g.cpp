@@ -37,31 +37,31 @@ void register_draw(sol::state& lua, const char* name) {
         };
 
     g["rect"] = [](float x, float y, float w, float h) {
-        DrawCore::Rect(g_pD2DDC, g_pSolidBrush, x, y, w, h);
+        DrawCore::Rect(g_pD2DDC.Get(), g_pSolidBrush, x, y, w, h);
         };
 
     g["circle"] = [](float x, float y, float r) {
-        DrawCore::Circle(g_pD2DDC, g_pSolidBrush, x, y, r);
+        DrawCore::Circle(g_pD2DDC.Get(), g_pSolidBrush, x, y, r);
         };
 
     g["polyline"] = [](sol::table v, sol::optional<bool> c) {
-        DrawCore::Polyline(g_pD2DDC, g_pSolidBrush, v, c.value_or(false), g_strokeWidth);
+        DrawCore::Polyline(g_pD2DDC.Get(), g_pSolidBrush, v, c.value_or(false), g_strokeWidth);
         };
 
     g["polygon"] = [](sol::table v) {
-        DrawCore::Polygon(g_pD2DDC, g_pSolidBrush, v);
+        DrawCore::Polygon(g_pD2DDC.Get(), g_pSolidBrush, v);
         };
 
     g["text"] = [](int fontId, std::string name, float x, float y) {
         if (fontId >= 0 && fontId < (int)g_fontTable.size())
-            DrawCore::Text(g_pD2DDC, g_pSolidBrush, g_fontTable[fontId], name, x, y);
+            DrawCore::Text(g_pD2DDC.Get(), g_pSolidBrush, g_fontTable[fontId].Get(), name, x, y);
         };
 
     g["image"] = [](int id, float dx, float dy, sol::optional<float> dw, sol::optional<float> dh,
         sol::optional<float> sx, sol::optional<float> sy, sol::optional<float> sw, sol::optional<float> sh, sol::optional<bool> flipX) {
             if (id < 0 || id >= (int)g_bitmapTable.size()) return;
 
-            ID2D1Bitmap* bmp = g_bitmapTable[id];
+            ID2D1Bitmap* bmp = g_bitmapTable[id].Get();
             auto size = bmp->GetSize();
             float _dw = dw.value_or(size.width);
             float _dh = dh.value_or(size.height);
@@ -73,7 +73,7 @@ void register_draw(sol::state& lua, const char* name) {
                 g_pD2DDC->SetTransform(D2D1::Matrix3x2F::Scale(-1.0f, 1.0f, D2D1::Point2F(dx + _dw / 2.0f, dy + _dh / 2.0f)) * old);
             }
 
-            DrawCore::Image(g_pD2DDC, bmp, dx, dy, _dw, _dh, sx.value_or(0), sy.value_or(0), sw.value_or(size.width), sh.value_or(size.height));
+            DrawCore::Image(g_pD2DDC.Get(), bmp, dx, dy, _dw, _dh, sx.value_or(0), sy.value_or(0), sw.value_or(size.width), sh.value_or(size.height));
 
             if (flipX.value_or(false)) g_pD2DDC->SetTransform(old);
         };
@@ -98,7 +98,7 @@ void register_draw(sol::state& lua, const char* name) {
     g["fontSize"] = [](int fontId, std::string text) -> std::pair<float, float> {
         if (fontId >= 0 && fontId < (int)g_fontTable.size()) {
             std::wstring wText = to_wstring(text);
-            IDWriteTextFormat* pFormat = g_fontTable[fontId]; // IDWriteTextFormat* 저장된 테이블
+            IDWriteTextFormat* pFormat = g_fontTable[fontId].Get(); // IDWriteTextFormat* 저장된 테이블
 
             IDWriteTextLayout* pLayout = nullptr;
             g_pDWriteFactory->CreateTextLayout(wText.c_str(), wText.length(), pFormat, 10000.0f, 10000.0f, &pLayout);

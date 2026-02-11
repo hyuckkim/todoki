@@ -15,7 +15,11 @@ bool g_isDrawing = false;
 void Reload() {
     printf("[Win] Reloading Script...\n");
 
+    lua.collect_garbage();
     unregisterLuaFunctions();
+
+    ReportDXGILiveObjects();
+
     InitLuaEngine(GetEntryFile());
     RegisterLuaLibs();
 
@@ -37,6 +41,8 @@ void drawing() {
     PreDraw();
     Call("Draw");
     PostDraw();
+
+    lua.step_gc(10);
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -138,7 +144,9 @@ int APIENTRY wWinMain(
             }
         }
     }
-
+    lua.collect_garbage();
+    lua = sol::state();
+    unregisterLuaFunctions();
     ReleaseGraphic();
     return 0;
 }

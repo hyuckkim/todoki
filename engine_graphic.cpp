@@ -16,10 +16,10 @@ using Microsoft::WRL::ComPtr;
 #pragma comment(lib, "windowscodecs.lib")
 
 // --- 전역 자원 ---
-ID2D1Factory1* g_pD2DFactory = nullptr;
-ID2D1DeviceContext* g_pD2DDC = nullptr;      // 기존 g_pDCRT 대체
-IDWriteFactory* g_pDWriteFactory = nullptr;
-IWICImagingFactory* g_pWICFactory = nullptr;
+ComPtr<ID2D1Factory1> g_pD2DFactory;
+ComPtr<ID2D1DeviceContext> g_pD2DDC;
+ComPtr<IDWriteFactory> g_pDWriteFactory;
+ComPtr<IWICImagingFactory> g_pWICFactory;
 
 ComPtr<ID3D11Device>    g_pD3D11Device;
 ComPtr<IDXGISwapChain1> g_pSwapChain;
@@ -37,9 +37,30 @@ extern "C" {
 }
 
 void InitCom() {
-    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-    DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&g_pDWriteFactory));
-    CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&g_pWICFactory));
+    // COM 라이브러리 초기화
+    HRESULT hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    if (FAILED(hr)) {
+        printf("COM Initialization Failed: 0x%08X\n", hr);
+        return;
+    }
+
+    // DirectWrite Factory 생성
+    // .ReleaseAndGetAddressOf()를 사용하면 혹시 모를 기존 객체를 해제하고 주소를 가져옵니다.
+    hr = DWriteCreateFactory(
+        DWRITE_FACTORY_TYPE_SHARED,
+        __uuidof(IDWriteFactory),
+        reinterpret_cast<IUnknown**>(g_pDWriteFactory.ReleaseAndGetAddressOf())
+    );
+    if (FAILED(hr)) printf("DWrite Factory Creation Failed\n");
+
+    // WIC Imaging Factory 생성
+    hr = CoCreateInstance(
+        CLSID_WICImagingFactory,
+        NULL,
+        CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(g_pWICFactory.ReleaseAndGetAddressOf())
+    );
+    if (FAILED(hr)) printf("WIC Factory Creation Failed\n");
 }
 
 extern bool g_isDrawing;
@@ -163,19 +184,28 @@ void PostDraw() {
 }
 
 void ReleaseGraphic() {
-    if (g_pDCompDevice) g_pDCompDevice.Reset();
-    if (g_pD2DDC) g_pD2DDC->Release();
-    if (g_pWICFactory) g_pWICFactory->Release();
-    if (g_pDWriteFactory) g_pDWriteFactory->Release();
-    if (g_pD2DFactory) g_pD2DFactory->Release();
+    if (g_pD2DDC) {
+        g_pD2DDC->SetTarget(nullptr);
+    }
+
+    g_pDCompVisual.Reset();
+    g_pDCompTarget.Reset();
+    g_pDCompDevice.Reset();
+    g_pSwapChain.Reset();
+    g_pD2DDC.Reset();
+    g_pD3D11Device.Reset();
+
+    g_pWICFactory.Reset();
+    g_pDWriteFactory.Reset();
+    g_pD2DFactory.Reset();
 
     CoUninitialize();
 }
 
-void RecreateDevice()
-{
-    g_pD2DDC->Release();
-    g_pD2DFactory->Release();
+void RecreateDevice() {
+    printf("[Win] Recreating Device due to error...\n");
+    g_pD2DDC.Reset();
+    g_pD2DFactory.Reset();
     g_pSwapChain.Reset();
     g_pD3D11Device.Reset();
 
@@ -190,15 +220,13 @@ void ResizeWindow(UINT width, UINT height)
     gDrawW = width;
     gDrawH = height;
 
-    // 1️⃣ 기존 타겟 해제
     g_pD2DDC->SetTarget(nullptr);
 
-    // 2️⃣ SwapChain 리사이즈
     HRESULT hr = g_pSwapChain->ResizeBuffers(
-        0,                      // buffer count 유지
+        0,
         width,
         height,
-        DXGI_FORMAT_UNKNOWN,    // 기존 포맷 유지
+        DXGI_FORMAT_UNKNOWN,
         0
     );
 
@@ -207,7 +235,6 @@ void ResizeWindow(UINT width, UINT height)
         return;
     }
 
-    // 3️⃣ 새 백버퍼 얻기
     ComPtr<IDXGISurface> surface;
     hr = g_pSwapChain->GetBuffer(
         0,
@@ -219,7 +246,6 @@ void ResizeWindow(UINT width, UINT height)
         return;
     }
 
-    // 4️⃣ D2D 타겟 비트맵 재생성
     D2D1_BITMAP_PROPERTIES1 props =
         D2D1::BitmapProperties1(
             D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
@@ -241,10 +267,8 @@ void ResizeWindow(UINT width, UINT height)
         return;
     }
 
-    // 5️⃣ 새 타겟 설정
     g_pD2DDC->SetTarget(bitmap.Get());
 
-    // 6️⃣ DirectComposition 반영 (안전하게)
     if (g_pDCompDevice)
         g_pDCompDevice->Commit();
 }

@@ -2,85 +2,75 @@
 #include "LuaJson.h"
 #include "engine_graphic.h"
 #include "sol.h"
-#include <gdiplus.h>
 
 // 전역 변수 초기화 (기존 유지)
-Gdiplus::Color g_currentColor(255, 255, 255, 255);
-std::vector<ID2D1Bitmap*> g_bitmapTable;
+std::vector<ComPtr<ID2D1Bitmap>> g_bitmapTable;
+std::vector<ComPtr<IDWriteTextFormat>> g_fontTable;
+
 std::map<std::string, int> g_pathCache;
-std::vector<IDWriteTextFormat*> g_fontTable;
 std::vector<std::wstring> g_fontFamilyTable;
 
-ID2D1Bitmap* LoadBitmapFromFile(
-    ID2D1DeviceContext* rt,
-    const std::string& path
-) {
+ComPtr<ID2D1Bitmap> LoadBitmapFromFile(ID2D1DeviceContext* rt, const std::string& path) {
     std::wstring wPath = to_wstring(path);
 
-    IWICBitmapDecoder* pDecoder = nullptr;
+    // ComPtr을 사용하면 함수 종료 시 자동으로 Release됩니다.
+    ComPtr<IWICBitmapDecoder> pDecoder;
+    ComPtr<IWICBitmapFrameDecode> pSource;
+    ComPtr<IWICFormatConverter> pConverter;
+    ComPtr<ID2D1Bitmap> pBitmap;
+
     HRESULT hr = g_pWICFactory->CreateDecoderFromFilename(
-        wPath.c_str(),
-        NULL,
-        GENERIC_READ,
-        WICDecodeMetadataCacheOnLoad,
-        &pDecoder
+        wPath.c_str(), NULL, GENERIC_READ, WICDecodeMetadataCacheOnLoad, &pDecoder
     );
+    if (FAILED(hr)) return nullptr;
 
-    if (FAILED(hr)) {
-        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND)) {
-            printf("[Resource Error] File not found: %s\n", path.c_str());
-        }
-        else {
-            printf("[Resource Error] Failed to load '%s' (HRESULT: 0x%08X)\n", path.c_str(), hr);
-        }
-        return nullptr;
-    }
+    hr = pDecoder->GetFrame(0, &pSource);
+    if (FAILED(hr)) return nullptr;
 
-    IWICBitmapFrameDecode* pSource = nullptr;
-    pDecoder->GetFrame(0, &pSource);
+    hr = g_pWICFactory->CreateFormatConverter(&pConverter);
+    if (FAILED(hr)) return nullptr;
 
-    IWICFormatConverter* pConverter = nullptr;
-    g_pWICFactory->CreateFormatConverter(&pConverter);
-    pConverter->Initialize(
-        pSource,
-        GUID_WICPixelFormat32bppPBGRA,
-        WICBitmapDitherTypeNone,
-        NULL,
-        0.f,
-        WICBitmapPaletteTypeMedianCut
+    hr = pConverter->Initialize(
+        pSource.Get(), GUID_WICPixelFormat32bppPBGRA,
+        WICBitmapDitherTypeNone, NULL, 0.f, WICBitmapPaletteTypeMedianCut
     );
+    if (FAILED(hr)) return nullptr;
 
-    ID2D1Bitmap* pBitmap = nullptr;
-    rt->CreateBitmapFromWicBitmap(pConverter, NULL, &pBitmap);
+    // 최종 비트맵 생성
+    hr = rt->CreateBitmapFromWicBitmap(pConverter.Get(), NULL, &pBitmap);
+    if (FAILED(hr)) return nullptr;
 
-    pConverter->Release();
-    pSource->Release();
-    pDecoder->Release();
-
-    return pBitmap; // 실패 시 nullptr 가능
+    return pBitmap;
 }
 
 void unregisterLuaFunctions() {
-    for (auto img : g_bitmapTable) if (img) img->Release();
-    for (auto font : g_fontTable) if (font) font->Release();
-    for (auto& fontPath : g_fontFamilyTable) {
-        RemoveFontResourceExW(fontPath.c_str(), FR_PRIVATE, 0);
-	}
-    g_fontTable.clear();
+    // 1. 비트맵 테이블 강제 리셋
+    for (auto& bmp : g_bitmapTable) {
+        bmp.Reset(); // 각 ComPtr을 명시적으로 Reset
+    }
     g_bitmapTable.clear();
+
+    // 2. 폰트 테이블 강제 리셋
+    for (auto& font : g_fontTable) {
+        font.Reset();
+    }
+    g_fontTable.clear();
+
+    // 3. 캐시 및 기타 테이블 정리
     g_pathCache.clear();
+    g_fontFamilyTable.clear();
 }
 
 void RebuildAllBitmaps() {
-    for (auto& bmp : g_bitmapTable) {
-        SafeRelease(&bmp);
-    }
-    for (const auto& [path, index]: g_pathCache) {
-        if (index < 0 || index >= (int)g_bitmapTable.size())
-            continue; // 방어
+    // 1. 기존 비트맵 모두 해제 (ComPtr이므로 clear만으로 충분)
+    for (auto& bmp : g_bitmapTable) bmp.Reset();
 
-        ID2D1Bitmap* bmp = LoadBitmapFromFile(g_pD2DDC, path);
-        g_bitmapTable[index] = bmp; // 실패 시 nullptr
+    // 2. 캐시된 경로를 바탕으로 재생성
+    for (const auto& [path, index] : g_pathCache) {
+        if (index < 0 || index >= (int)g_bitmapTable.size()) continue;
+
+        // .Get()을 통해 현재 장치 컨텍스트 전달
+        g_bitmapTable[index] = LoadBitmapFromFile(g_pD2DDC.Get(), path);
     }
 }
 
@@ -99,7 +89,7 @@ void register_res(sol::state& lua, const char* name) {
         if (it != g_pathCache.end())
             return it->second;
 
-        ID2D1Bitmap* pBitmap = LoadBitmapFromFile(g_pD2DDC, path);
+        ComPtr<ID2D1Bitmap> pBitmap = LoadBitmapFromFile(g_pD2DDC.Get(), path);
         if (!pBitmap)
             return -1;
 

@@ -16,15 +16,14 @@ extern int gDrawW;
 extern int gDrawH;
 extern HWND g_hwnd;
 
-extern std::vector<IDWriteTextFormat*> g_fontTable;
-extern std::vector<ID2D1Bitmap*> g_bitmapTable;
+extern std::vector<ComPtr<ID2D1Bitmap>> g_bitmapTable;
+extern std::vector<ComPtr<IDWriteTextFormat>> g_fontTable;
 
 // --- 핵심 엔진 컴포넌트 (Extern 선언) ---
-// D2D1Factory1 이상이어야 DirectComposition과 연동 가능합니다.
-extern ID2D1Factory1* g_pD2DFactory;
-extern ID2D1DeviceContext* g_pD2DDC;
-extern IDWriteFactory* g_pDWriteFactory;
-extern IWICImagingFactory* g_pWICFactory;
+extern ComPtr<ID2D1Factory1> g_pD2DFactory;
+extern ComPtr<ID2D1DeviceContext> g_pD2DDC;
+extern ComPtr<IDWriteFactory> g_pDWriteFactory;
+extern ComPtr<IWICImagingFactory> g_pWICFactory;
 
 // --- 초기화 및 제어 함수 ---
 void InitCom();

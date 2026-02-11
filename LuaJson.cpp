@@ -3,17 +3,14 @@
 
 using json = nlohmann::json;
 
-// 파일 스코프 정적 변수로 캡슐화
-static std::unordered_map<std::string, std::unique_ptr<json>> g_JsonCache;
-static std::mutex g_JsonMutex;
-
-sol::object wrap_json_node(json& j, sol::state_view lua) {
-    if (j.is_structured()) {
-        return sol::make_object(lua, JsonNode{ &j });
+sol::object wrap_json_node(std::shared_ptr<json> root, json* current, sol::state_view lua) {
+    if (current->is_structured()) {
+        return sol::make_object(lua, JsonNode{ root, current });
     }
-    if (j.is_string())  return sol::make_object(lua, j.get<std::string>());
-    if (j.is_number())  return sol::make_object(lua, j.get<double>());
-    if (j.is_boolean()) return sol::make_object(lua, j.get<bool>());
+
+    if (current->is_string()) return sol::make_object(lua, current->get<std::string>());
+    if (current->is_number()) return sol::make_object(lua, current->get<double>());
+    if (current->is_boolean()) return sol::make_object(lua, current->get<bool>());
     return sol::nil;
 }
 
@@ -82,30 +79,33 @@ json lua_table_to_json(sol::object obj) {
 bool JsonTask::check(sol::this_state s) {
     if (isDone) return true;
 
+    // 비동기 작업이 완료되었는지 확인
     if (fuel.valid() && fuel.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
-        std::lock_guard<std::mutex> lock(g_JsonMutex);
-
         try {
-            g_JsonCache[path] = std::make_unique<json>(fuel.get());
-            sol::state_view lua(s);
+            // 결과를 unique_ptr이 아닌 shared_ptr로 받아옵니다.
+            // fuel.get()은 한 번만 호출 가능하므로 바로 할당합니다.
+            result = std::make_shared<json>(fuel.get());
             isDone = true;
             return true;
         }
         catch (...) {
-            return true; // 에러가 나도 완료 처리 (결과는 nil)
+            result = nullptr; // 실패 시 안전하게 초기화
+            isDone = true;
+            return true;
         }
     }
     return false;
 }
 
 sol::object JsonTask::getResult(sol::this_state s) {
-    return wrap_json_node(*g_JsonCache[path], s);
+    if (!result) return sol::nil;
+
+    sol::state_view lua(s);
+    return wrap_json_node(result, result.get(), lua);
 }
 
 // --- 모듈 등록 함수 ---
 void register_json_module(sol::state_view& lua, const char* namespace_name) {
-    std::unordered_map<std::string, std::unique_ptr<json>> empty;
-    g_JsonCache.swap(empty);
     // 1. JsonNode 유저타입 등록
     lua.new_usertype<JsonNode>("json_node",
         sol::meta_function::index, [](JsonNode& n, sol::stack_object key, sol::this_state s) -> sol::object {
@@ -115,11 +115,11 @@ void register_json_module(sol::state_view& lua, const char* namespace_name) {
 
             if (key.is<std::string>() && j.is_object()) {
                 auto it = j.find(key.as<std::string>());
-                if (it != j.end()) return wrap_json_node(it.value(), lua_s);
+                if (it != j.end()) return wrap_json_node(n.data, &it.value(), lua_s);
             }
             else if (key.is<double>() && j.is_array()) {
                 int idx = static_cast<int>(key.as<double>()) - 1;
-                if (idx >= 0 && idx < (int)j.size()) return wrap_json_node(j[idx], lua_s);
+                if (idx >= 0 && idx < (int)j.size()) return wrap_json_node(n.data, &j[idx], lua_s);
             }
             return sol::nil;
         },
@@ -136,11 +136,11 @@ void register_json_module(sol::state_view& lua, const char* namespace_name) {
                 if (j.is_object()) {
                     auto it = key.is<sol::nil_t>() ? j.begin() : j.find(key.as<std::string>());
                     if (key.is<std::string>() && it != j.end()) ++it;
-                    if (it != j.end()) return std::make_tuple(sol::make_object(l, it.key()), wrap_json_node(it.value(), l));
+                    if (it != j.end()) return std::make_tuple(sol::make_object(l, it.key()), wrap_json_node(n.data, &it.value(), l));
                 }
                 else if (j.is_array()) {
                     size_t idx = key.is<sol::nil_t>() ? 0 : static_cast<size_t>(key.as<double>());
-                    if (idx < j.size()) return std::make_tuple(sol::make_object(l, idx + 1), wrap_json_node(j[idx], l));
+                    if (idx < j.size()) return std::make_tuple(sol::make_object(l, idx + 1), wrap_json_node(n.data, &j[idx], l));
                 }
                 return std::make_tuple(sol::object(sol::nil), sol::object(sol::nil));
                 };
@@ -159,10 +159,9 @@ void register_json_module(sol::state_view& lua, const char* namespace_name) {
         if (!file.is_open()) return sol::nil;
 
         try {
-            std::lock_guard<std::mutex> lock(g_JsonMutex);
-            g_JsonCache[path] = std::make_unique<json>();
-            file >> *g_JsonCache[path];
-            return wrap_json_node(*g_JsonCache[path], s);
+            auto j = std::make_shared<json>(); // 매번 새로 생성
+            file >> *j;
+            return wrap_json_node(j, j.get(), s); // shared_ptr을 넘겨서 Lua가 소유하게 함
         }
         catch (...) {
             return sol::nil;
