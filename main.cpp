@@ -78,6 +78,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     case WM_RBUTTONUP:
         Call("OnRightMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam));
         break;
+    case WM_ACTIVATE:
+        if ((BOOL)wParam) Call("OnActive");
+        else Call("OnInactive");
+        break;
 
     default:
         return DefWindowProc(hwnd, msg, wParam, lParam);
