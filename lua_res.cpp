@@ -2,6 +2,7 @@
 #include "LuaJson.h"
 #include "engine_graphic.h"
 #include "sol.h"
+#include "LuaRandom.h"
 
 // 전역 변수 초기화 (기존 유지)
 std::vector<ComPtr<ID2D1Bitmap>> g_bitmapTable;
@@ -164,4 +165,5 @@ void register_res(sol::state& lua, const char* name) {
     // 분리한 JSON 모듈 등록 호출
     sol::state_view lua_view(lua);
     register_json_module(lua_view, name);
+    register_random_module(lua_view, name);
 }

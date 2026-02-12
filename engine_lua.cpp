@@ -18,7 +18,8 @@ void InitLuaEngine(const char* entry) {
         sol::lib::math,
         sol::lib::debug,
         sol::lib::utf8,
-        sol::lib::coroutine
+        sol::lib::coroutine,
+        sol::lib::os
     );
 
 

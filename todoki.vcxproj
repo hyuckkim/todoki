@@ -171,6 +171,7 @@
     <ClCompile Include="entry.cpp" />
     <ClCompile Include="LuaCanvas.cpp" />
     <ClCompile Include="LuaJson.cpp" />
+    <ClCompile Include="LuaRandom.cpp" />
     <ClCompile Include="lua_bind.cpp" />
     <ClCompile Include="lua_g.cpp" />
     <ClCompile Include="lua_input.cpp" />
@@ -214,6 +215,7 @@
     <ClInclude Include="entry.h" />
     <ClInclude Include="LuaCanvas.h" />
     <ClInclude Include="LuaJson.h" />
+    <ClInclude Include="LuaRandom.h" />
     <ClInclude Include="nloh_json.h" />
     <ClInclude Include="sol.h" />
     <ClInclude Include="util.h" />
