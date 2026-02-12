@@ -4,6 +4,8 @@
 #ifndef SafeRelease
 #define SafeRelease(p) { if(p) { (p)->Release(); (p) = nullptr; } }
 #endif
+
+extern float g_globalAlpha;
 LuaCanvas::LuaCanvas(float w, float h) {
     // 1. 호환되는 렌더 타겟 생성
     HRESULT hr = g_pD2DDC->CreateCompatibleRenderTarget(D2D1::SizeF(w, h), &pRT);
@@ -11,6 +13,7 @@ LuaCanvas::LuaCanvas(float w, float h) {
         // 2. 이 캔버스 전용 브러시 생성
         pRT->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f), &pCanvasBrush);
     }
+    pGlobalAlpha = 1.0;
 }
 
 void LuaCanvas::release() {
@@ -75,7 +78,7 @@ void LuaCanvas::image(int id, float dx, float dy, sol::optional<float> dw, sol::
     auto s = bmp->GetSize();
     execute([&]() {
         DrawCore::Image(pRT.Get(), bmp, dx, dy, dw.value_or(s.width), dh.value_or(s.height),
-            sx.value_or(0), sy.value_or(0), sw.value_or(s.width), sh.value_or(s.height));
+            sx.value_or(0), sy.value_or(0), sw.value_or(s.width), sh.value_or(s.height), pGlobalAlpha);
         });
 }
 
@@ -110,7 +113,7 @@ void LuaCanvas::draw(float x, float y,
         g_pD2DDC->DrawBitmap(
             pBitmap.Get(),
             destRect,
-            1.0f,
+            g_globalAlpha,
             D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
             &srcRect
         );

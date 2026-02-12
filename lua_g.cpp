@@ -7,12 +7,24 @@ ID2D1SolidColorBrush* g_pSolidBrush = nullptr; // 전역 브러시 하나를 색
 D2D1_COLOR_F g_d2dColor = { 1.0f, 1.0f, 1.0f, 1.0f }; // 현재 색상 저장용
 int g_clipCount = 0;
 float g_strokeWidth = 1.0;
+float g_globalAlpha = 1.0;
+
 std::vector<StateLayer> g_stateStack;
+
+void UpdateBrushAlpha() {
+    if (g_pSolidBrush) {
+        // 현재 브러시 색상의 알파값은 유지하되, globalAlpha를 곱해서 적용
+        // 혹은 g_d2dColor 자체를 이미 계산된 값으로 관리해도 됩니다.
+        g_pSolidBrush->SetOpacity(g_globalAlpha);
+    }
+}
 
 void register_draw(sol::state& lua, const char* name) {
     g_pD2DDC->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
     g_stateStack.clear();
     g_clipCount = 0;
+    g_strokeWidth = 1.0;
+    g_globalAlpha = 1.0;
 
     lua.new_usertype<LuaCanvas>("Canvas",
         sol::constructors<LuaCanvas(float, float)>(),
@@ -73,25 +85,36 @@ void register_draw(sol::state& lua, const char* name) {
                 g_pD2DDC->SetTransform(D2D1::Matrix3x2F::Scale(-1.0f, 1.0f, D2D1::Point2F(dx + _dw / 2.0f, dy + _dh / 2.0f)) * old);
             }
 
-            DrawCore::Image(g_pD2DDC.Get(), bmp, dx, dy, _dw, _dh, sx.value_or(0), sy.value_or(0), sw.value_or(size.width), sh.value_or(size.height));
+            DrawCore::Image(g_pD2DDC.Get(), bmp, dx, dy, _dw, _dh,
+                sx.value_or(0), sy.value_or(0),
+                sw.value_or(size.width), sh.value_or(size.height),
+                g_globalAlpha);
 
             if (flipX.value_or(false)) g_pD2DDC->SetTransform(old);
         };
     g["lineWidth"] = [](float width) {
         g_strokeWidth = width;
         };
+    g["globalAlpha"] = [](float alpha) {
+        g_globalAlpha = alpha;
+        UpdateBrushAlpha(); // 투명도 즉시 반영
+        };
+
     g["color"] = [](float r, float g, float b, sol::optional<float> a) {
-        g_d2dColor = D2D1::ColorF(r / 255.0f, g / 255.0f, b / 255.0f, a.value_or(255) / 255.0f);
+        // 컬러 설정 시에도 globalAlpha를 고려한 최종 색상 결정
+        // (a는 0~255 범위라고 가정)
+        float baseAlpha = a.value_or(255.0f) / 255.0f;
+        g_d2dColor = D2D1::ColorF(r / 255.0f, g / 255.0f, b / 255.0f, baseAlpha);
 
         if (g_pD2DDC) {
             if (g_pSolidBrush == nullptr) {
-                // 브러시가 처음일 때만 생성
                 g_pD2DDC->CreateSolidColorBrush(g_d2dColor, &g_pSolidBrush);
             }
             else {
-                // 이미 있으면 색상만 변경 (이게 훨씬 빠릅니다)
                 g_pSolidBrush->SetColor(g_d2dColor);
             }
+            // 색상을 바꾼 후에도 전역 알파가 적용되도록 세팅
+            UpdateBrushAlpha();
         }
         };
 

@@ -12,6 +12,7 @@ private:
     // 이 캔버스 전용 타겟과 브러시
     ComPtr<ID2D1BitmapRenderTarget> pRT;
     ComPtr<ID2D1SolidColorBrush> pCanvasBrush;
+    float pGlobalAlpha;
 
 public:
     LuaCanvas(float w, float h);
@@ -59,5 +60,5 @@ namespace DrawCore {
     void Text(ID2D1RenderTarget* rt, ID2D1SolidColorBrush* brush, IDWriteTextFormat* pFormat, const std::string& text, float x, float y);
 
     // 이미지
-    void Image(ID2D1RenderTarget* rt, ID2D1Bitmap* bmp, float dx, float dy, float dw, float dh, float sx, float sy, float sw, float sh);
+    void Image(ID2D1RenderTarget* rt, ID2D1Bitmap* bmp, float dx, float dy, float dw, float dh, float sx, float sy, float sw, float sh, float alpha);
 }
