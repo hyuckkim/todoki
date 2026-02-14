@@ -2,6 +2,7 @@
 #include "engine_log.h"
 #include "engine_lua.h"
 #include "engine_graphic.h"
+#include "engine_sound.h"
 #include "entry.h"
 
 #include <unordered_set>
@@ -125,6 +126,8 @@ int APIENTRY wWinMain(
         return -1;
     }
     ResetLuaLogState();
+    EngineSound::Instance().Initialize();
+
     InitLuaEngine(GetEntryFile());
     LuaConfig config = LoadLuaConfig();
 
@@ -187,5 +190,6 @@ int APIENTRY wWinMain(
     lua = sol::state();
     unregisterLuaFunctions();
     ReleaseGraphic();
+    EngineSound::Instance().Shutdown();
     return 0;
 }

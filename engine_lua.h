@@ -12,6 +12,8 @@ void register_draw(sol::state& lua, const char* name);
 void register_input(sol::state& lua, const char* name);
 void register_sys(sol::state& lua, const char* name);
 void register_res(sol::state& lua, const char* name);
+void register_sound(sol::state& lua, const char* name);
+
 void unregisterLuaFunctions();
 
 void HandleLuaResult(const std::string& func_name, const sol::protected_function_result& result);

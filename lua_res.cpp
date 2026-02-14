@@ -3,11 +3,14 @@
 #include "engine_graphic.h"
 #include "sol.h"
 #include "LuaRandom.h"
+#include <soloud_wav.h>
 #include "packManager.cpp"
 
 // 전역 변수 초기화 (기존 유지)
 std::vector<ComPtr<ID2D1Bitmap>> g_bitmapTable;
 std::vector<ComPtr<IDWriteTextFormat>> g_fontTable;
+std::vector<std::shared_ptr<SoLoud::Wav>> g_soundTable;
+std::map<std::string, int> g_soundPathCache; // 사운드용 캐시
 
 std::map<std::string, int> g_pathCache;
 std::vector<std::wstring> g_fontFamilyTable;
@@ -83,6 +86,12 @@ void unregisterLuaFunctions() {
     // 3. 캐시 및 기타 테이블 정리
     g_pathCache.clear();
     g_fontFamilyTable.clear();
+
+    for (auto& snd : g_soundTable) {
+        snd.reset();
+    }
+    g_soundTable.clear();
+    g_soundPathCache.clear();
 }
 
 void RebuildAllBitmaps() {
@@ -210,6 +219,39 @@ void register_res(sol::state& lua, const char* name) {
         g_fontTable.push_back(pTextFormat);
         return id;
         };
+
+    res["sound"] = [](std::string path) -> int {
+        // 1. 중복 로드 방지 캐시 확인
+        auto it = g_soundPathCache.find(path);
+        if (it != g_soundPathCache.end()) return it->second;
+
+        auto pWav = std::make_shared<SoLoud::Wav>();
+        SoLoud::result hr;
+
+        // 2. 파일 시스템 우선 순위
+        if (GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            hr = pWav->load(path.c_str());
+        }
+        // 3. PAK 파일 확인
+        else {
+            auto data = PackManager::Instance().GetFileData(path);
+            if (!data.empty()) {
+                // 데이터를 복사해서 들고 있도록(true, true) 설정
+                hr = pWav->loadMem(data.data(), (unsigned int)data.size(), true, true);
+            }
+            else {
+                return -1;
+            }
+        }
+
+        if (hr != SoLoud::SO_NO_ERROR) return -1;
+
+        int newID = (int)g_soundTable.size();
+        g_soundTable.push_back(pWav);
+        g_soundPathCache[path] = newID;
+        return newID;
+        };
+
 
     // 분리한 JSON 모듈 등록 호출
     sol::state_view lua_view(lua);

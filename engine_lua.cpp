@@ -37,6 +37,7 @@ void RegisterLuaLibs() {
     register_input(lua, "is");
     register_draw(lua, "g");
     register_res(lua, "res");
+    register_sound(lua, "s");
 }
 
 LuaConfig LoadLuaConfig() {
