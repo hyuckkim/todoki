@@ -34,23 +34,21 @@ void Reload() {
     needReload = false;
 }
 
-void drawing() {
+void drawing(LARGE_INTEGER currentTime) {
     if (needReload) {
         Reload();
         needReload = false;
     }
 
-    // 현재 시간 구하기
-    LARGE_INTEGER currentTime;
-    QueryPerformanceCounter(&currentTime);
-
-    // Delta Time 계산 (초 단위 혹은 밀리초 단위)
-    // 밀리초(ms) 단위를 원하시면 1000.0을 곱합니다.
+    // Delta Time 계산
     double dt = (double)(currentTime.QuadPart - g_lastTime.QuadPart) * 1000.0 / g_frequency.QuadPart;
     g_lastTime = currentTime;
 
+    // 만약 dt가 너무 크게 튀는 것을 방지 (예: 창 드래그 시)
+    if (dt > 100.0) dt = 16.66;
+
     UpdateMousePassthrough();
-    Call("Update", dt); // 이제 Lua에 16.666... 같은 정밀한 값이 전달됩니다.
+    Call("Update", dt);
 
     PreDraw();
     Call("Draw");
@@ -150,20 +148,21 @@ int APIENTRY wWinMain(
     timeBeginPeriod(1); // Sleep의 최소 단위를 1ms로 강제
 
     while (true) {
+        // 1. 프레임 시작 시간은 루프의 가장 꼭대기에서!
+        LARGE_INTEGER frameStart;
+        QueryPerformanceCounter(&frameStart);
+
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) break;
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
         else {
-            // 프레임 시작 시간 기록
-            LARGE_INTEGER frameStart;
-            QueryPerformanceCounter(&frameStart);
-
-            drawing();
+            // 2. 그리기 및 로직 실행
+            drawing(frameStart);
             FlushLogs();
 
-            // --- 프레임 제어 로직 ---
+            // 3. 프레임 제어
             if (!g_vSync) {
                 double targetMs = 1000.0 / g_targetFPS;
 
@@ -172,7 +171,8 @@ int APIENTRY wWinMain(
                 double elapsedMs = (double)(frameEnd.QuadPart - frameStart.QuadPart) * 1000.0 / g_frequency.QuadPart;
 
                 if (elapsedMs < targetMs) {
-                    // 남은 시간만큼 Sleep (정밀도를 위해 1ms 정도 여유를 두고 쉼)
+                    // 루프 없이 그냥 한 번에 쉽니다. 
+                    // 윈도우 스케줄러가 스레드를 완전히 잠재우게 하여 전력을 아낍니다.
                     DWORD sleepTime = (DWORD)(targetMs - elapsedMs);
                     if (sleepTime > 0) Sleep(sleepTime);
                 }
