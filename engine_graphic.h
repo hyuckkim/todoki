@@ -25,6 +25,8 @@ extern ComPtr<ID2D1DeviceContext> g_pD2DDC;
 extern ComPtr<IDWriteFactory> g_pDWriteFactory;
 extern ComPtr<IWICImagingFactory> g_pWICFactory;
 
+extern bool g_vSync;
+extern int g_targetFPS;
 // --- 초기화 및 제어 함수 ---
 void InitCom();
 void InitD2D();
