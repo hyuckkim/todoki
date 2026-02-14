@@ -3,6 +3,7 @@
 #include "engine_graphic.h"
 #include "sol.h"
 #include "LuaRandom.h"
+#include "packManager.cpp"
 
 // 전역 변수 초기화 (기존 유지)
 std::vector<ComPtr<ID2D1Bitmap>> g_bitmapTable;
@@ -10,6 +11,28 @@ std::vector<ComPtr<IDWriteTextFormat>> g_fontTable;
 
 std::map<std::string, int> g_pathCache;
 std::vector<std::wstring> g_fontFamilyTable;
+
+ComPtr<ID2D1Bitmap> LoadBitmapFromMemory(ID2D1DeviceContext* rt, const uint8_t* pData, size_t size) {
+    if (!pData || size == 0) return nullptr;
+
+    ComPtr<IWICStream> pStream;
+    ComPtr<IWICBitmapDecoder> pDecoder;
+    ComPtr<IWICBitmapFrameDecode> pSource;
+    ComPtr<IWICFormatConverter> pConverter;
+    ComPtr<ID2D1Bitmap> pBitmap;
+
+    if (FAILED(g_pWICFactory->CreateStream(&pStream))) return nullptr;
+    if (FAILED(pStream->InitializeFromMemory(const_cast<BYTE*>(pData), (DWORD)size))) return nullptr;
+
+    if (FAILED(g_pWICFactory->CreateDecoderFromStream(pStream.Get(), NULL, WICDecodeMetadataCacheOnLoad, &pDecoder))) return nullptr;
+    if (FAILED(pDecoder->GetFrame(0, &pSource))) return nullptr;
+
+    g_pWICFactory->CreateFormatConverter(&pConverter);
+    pConverter->Initialize(pSource.Get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, NULL, 0.f, WICBitmapPaletteTypeMedianCut);
+
+    rt->CreateBitmapFromWicBitmap(pConverter.Get(), NULL, &pBitmap);
+    return pBitmap;
+}
 
 ComPtr<ID2D1Bitmap> LoadBitmapFromFile(ID2D1DeviceContext* rt, const std::string& path) {
     std::wstring wPath = to_wstring(path);
@@ -86,13 +109,26 @@ void register_res(sol::state& lua, const char* name) {
     // 이미지/폰트 등 기존 로직 등록...
     auto res = lua.create_named_table(name);
     res["image"] = [](std::string path) -> int {
+        // 1. 중복 로드 방지 캐시
         auto it = g_pathCache.find(path);
-        if (it != g_pathCache.end())
-            return it->second;
+        if (it != g_pathCache.end()) return it->second;
 
-        ComPtr<ID2D1Bitmap> pBitmap = LoadBitmapFromFile(g_pD2DDC.Get(), path);
-        if (!pBitmap)
-            return -1;
+        ComPtr<ID2D1Bitmap> pBitmap;
+
+        // 2. 파일 시스템 우선 순위 (Disk Check)
+        // GetFileAttributesA는 파일이 실제로 디스크에 있을 때만 성공합니다.
+        if (GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            pBitmap = LoadBitmapFromFile(g_pD2DDC.Get(), path);
+        }
+        // 3. 디스크에 없으면 PAK 파일에서 검색
+        else {
+            auto data = PackManager::Instance().GetFileData(path);
+            if (!data.empty()) {
+                pBitmap = LoadBitmapFromMemory(g_pD2DDC.Get(), data.data(), data.size());
+            }
+        }
+
+        if (!pBitmap) return -1;
 
         int newID = (int)g_bitmapTable.size();
         g_bitmapTable.push_back(pBitmap);
@@ -122,21 +158,35 @@ void register_res(sol::state& lua, const char* name) {
 
     // 3. 폰트 파일(.ttf) 로드
     res["fontFile"] = [](std::string path, std::string familyName, float size) -> int {
-        // 1. 파일 존재 여부 확인 (기본적인 가드)
-        std::wstring wPath = to_wstring(path);
         std::wstring wName = to_wstring(familyName);
+        HANDLE hFontRes = nullptr;
+        bool isMemFont = false;
 
-        // 2. OS에 폰트 등록 시도
-        // 반환값이 0이면 등록 실패 (파일이 없거나 형식이 잘못됨)
-        int fontsAdded = AddFontResourceExW(wPath.c_str(), FR_PRIVATE, 0);
-
-        if (fontsAdded == 0) {
-            printf("[Resource Error] Font file not found or invalid: %s\n", path.c_str());
-            // 실패 시 -1 반환 혹은 기본 폰트 처리
-            return -1;
+        // 1. 로컬 파일 확인 (우선순위)
+        if (GetFileAttributesA(path.c_str()) != INVALID_FILE_ATTRIBUTES) {
+            std::wstring wPath = to_wstring(path);
+            if (AddFontResourceExW(wPath.c_str(), FR_PRIVATE, 0) > 0) {
+                g_fontFamilyTable.push_back(wPath); // 나중에 해제하기 위함
+            }
+            else {
+                return -1;
+            }
         }
+        // 2. PAK 파일 확인
+        else {
+            auto data = PackManager::Instance().GetFileData(path);
+            if (data.empty()) return -1;
 
-        g_fontFamilyTable.push_back(wPath);
+            // 메모리에 로드된 폰트 데이터를 OS에 등록
+            DWORD numFonts = 0;
+            hFontRes = AddFontMemResourceEx(data.data(), (DWORD)data.size(), nullptr, &numFonts);
+
+            if (!hFontRes) {
+                printf("[Resource Error] Failed to load font from memory: %s\n", path.c_str());
+                return -1;
+            }
+            isMemFont = true;
+        }
 
         // 3. TextFormat 생성
         IDWriteTextFormat* pTextFormat = nullptr;
@@ -150,15 +200,14 @@ void register_res(sol::state& lua, const char* name) {
         );
 
         if (FAILED(hr)) {
-            printf("[Resource Error] Failed to create TextFormat for: %s (HRESULT: 0x%08X)\n", familyName.c_str(), hr);
-            // 등록했던 리소스 해제
-            RemoveFontResourceExW(wPath.c_str(), FR_PRIVATE, 0);
+            // 실패 시 등록했던 폰트 해제
+            if (isMemFont) RemoveFontMemResourceEx(hFontRes);
+            else RemoveFontResourceExW(to_wstring(path).c_str(), FR_PRIVATE, 0);
             return -1;
         }
 
         int id = (int)g_fontTable.size();
         g_fontTable.push_back(pTextFormat);
-
         return id;
         };
 

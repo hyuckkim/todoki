@@ -162,6 +162,9 @@
     <ClCompile Include="LuaRandom.cpp">
       <Filter>소스 파일</Filter>
     </ClCompile>
+    <ClCompile Include="packManager.cpp">
+      <Filter>소스 파일</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Cache\lua-5.4.8\src\lparser.h">

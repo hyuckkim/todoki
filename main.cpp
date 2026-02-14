@@ -5,6 +5,7 @@
 #include "entry.h"
 
 #include <unordered_set>
+#include "packManager.cpp"
 #pragma comment(lib, "winmm.lib")
 
 ULONGLONG lastTick = 0;
@@ -118,6 +119,7 @@ int APIENTRY wWinMain(
     }
 #endif
 
+    PackManager::Instance().Init("resources.pak", "assets/");
     HRESULT res = ReadEnteryFromArgs();
     if (res != S_OK) {
         return -1;
