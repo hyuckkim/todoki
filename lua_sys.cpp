@@ -2,6 +2,9 @@
 #include "sol.h"
 #include <tuple>
 
+extern bool g_vSync;
+extern int g_targetFPS;
+
 void register_sys(sol::state& lua, const char* name) {
     auto s = lua.create_named_table(name);
 
@@ -109,6 +112,19 @@ void register_sys(sol::state& lua, const char* name) {
 
         return monitorList;
         };
+
+    // VSync 설정 (true: 켬, false: 끔)
+    s["setVsync"] = [](bool enable) {
+        g_vSync = enable;
+        };
+
+    // 타겟 프레임 설정 (30, 60 등)
+    s["setTargetFPS"] = [](int fps) {
+        if (fps > 0) {
+            g_targetFPS = fps;
+        }
+        };
+
     // 7. 엔진 종료
     s["quit"] = []() {
         PostQuitMessage(0);

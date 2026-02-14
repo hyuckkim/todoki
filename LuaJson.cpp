@@ -104,6 +104,30 @@ sol::object JsonTask::getResult(sol::this_state s) {
     return wrap_json_node(result, result.get(), lua);
 }
 
+sol::object json_to_lua(nlohmann::json& j, sol::state_view& lua) {
+    if (j.is_null()) return sol::nil;
+    if (j.is_boolean()) return sol::make_object(lua, j.get<bool>());
+    if (j.is_number()) return sol::make_object(lua, j.get<double>());
+    if (j.is_string()) return sol::make_object(lua, j.get<std::string>());
+
+    if (j.is_object()) {
+        sol::table t = lua.create_table();
+        for (auto& el : j.items()) {
+            t[el.key()] = json_to_lua(el.value(), lua);
+        }
+        return t;
+    }
+
+    if (j.is_array()) {
+        sol::table t = lua.create_table();
+        for (size_t i = 0; i < j.size(); ++i) {
+            t[i + 1] = json_to_lua(j[i], lua);
+        }
+        return t;
+    }
+    return sol::nil;
+}
+
 // --- 모듈 등록 함수 ---
 void register_json_module(sol::state_view& lua, const char* namespace_name) {
     // 1. JsonNode 유저타입 등록
@@ -148,6 +172,10 @@ void register_json_module(sol::state_view& lua, const char* namespace_name) {
         },
         sol::meta_function::to_string, [](JsonNode& n) {
             return n.node ? n.node->dump() : "nil node";
+        },
+        "to_table", [](JsonNode& n, sol::this_state s) {
+            sol::state_view lua_s(s);
+            return n.node ? json_to_lua(*(n.node), lua_s) : sol::object(sol::nil);
         }
     );
 

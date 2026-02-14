@@ -5,14 +5,21 @@
 #include "entry.h"
 
 #include <unordered_set>
+#pragma comment(lib, "winmm.lib")
 
 ULONGLONG lastTick = 0;
 
 bool needReload = false;
 bool g_isDrawing = false;
 
+int g_targetFPS = 60;
+bool g_vSync = false;
+
+LARGE_INTEGER g_frequency;
+LARGE_INTEGER g_lastTime;
 
 void Reload() {
+    Call("Quit");
     printf("[Win] Reloading Script...\n");
 
     lua.collect_garbage();
@@ -32,11 +39,18 @@ void drawing() {
         Reload();
         needReload = false;
     }
-    ULONGLONG now = GetTickCount64();
-    double dt = double(now - lastTick);
-    lastTick = now;
+
+    // 현재 시간 구하기
+    LARGE_INTEGER currentTime;
+    QueryPerformanceCounter(&currentTime);
+
+    // Delta Time 계산 (초 단위 혹은 밀리초 단위)
+    // 밀리초(ms) 단위를 원하시면 1000.0을 곱합니다.
+    double dt = (double)(currentTime.QuadPart - g_lastTime.QuadPart) * 1000.0 / g_frequency.QuadPart;
+    g_lastTime = currentTime;
+
     UpdateMousePassthrough();
-    Call("Update", dt);
+    Call("Update", dt); // 이제 Lua에 16.666... 같은 정밀한 값이 전달됩니다.
 
     PreDraw();
     Call("Draw");
@@ -48,6 +62,7 @@ void drawing() {
 LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_DESTROY:
+    case WM_QUERYENDSESSION:
         PostQuitMessage(0);
         break;
     case WM_KEYDOWN:
@@ -120,34 +135,52 @@ int APIENTRY wWinMain(
     InitWindow(WndProc, hInstance, titleW.c_str());
     InitD2D();
 
-    const int TARGET_FPS = 60;
-    const int FRAME_DELAY = 1000 / TARGET_FPS;
+    LARGE_INTEGER frequency;
+    QueryPerformanceFrequency(&frequency);
 
-    lastTick = GetTickCount64();
+    double targetFrameTime = 1000.0 / g_targetFPS;
     ShowWindow(g_hwnd, nCmdShow);
+
+    QueryPerformanceFrequency(&g_frequency);
+    QueryPerformanceCounter(&g_lastTime);
 
     RegisterLuaLibs();
     Call("Init");
     MSG msg;
+    timeBeginPeriod(1); // Sleep의 최소 단위를 1ms로 강제
+
     while (true) {
-        ULONGLONG frameStart = GetTickCount64();
         if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
             if (msg.message == WM_QUIT) break;
-
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
         else {
+            // 프레임 시작 시간 기록
+            LARGE_INTEGER frameStart;
+            QueryPerformanceCounter(&frameStart);
+
             drawing();
             FlushLogs();
 
-            // 프레임 제어
-            ULONGLONG frameTime = GetTickCount64() - frameStart;
-            if (frameTime < FRAME_DELAY) {
-                Sleep(FRAME_DELAY - (DWORD)frameTime);
+            // --- 프레임 제어 로직 ---
+            if (!g_vSync) {
+                double targetMs = 1000.0 / g_targetFPS;
+
+                LARGE_INTEGER frameEnd;
+                QueryPerformanceCounter(&frameEnd);
+                double elapsedMs = (double)(frameEnd.QuadPart - frameStart.QuadPart) * 1000.0 / g_frequency.QuadPart;
+
+                if (elapsedMs < targetMs) {
+                    // 남은 시간만큼 Sleep (정밀도를 위해 1ms 정도 여유를 두고 쉼)
+                    DWORD sleepTime = (DWORD)(targetMs - elapsedMs);
+                    if (sleepTime > 0) Sleep(sleepTime);
+                }
             }
         }
     }
+    timeEndPeriod(1);
+    Call("Quit");
     lua.collect_garbage();
     lua = sol::state();
     unregisterLuaFunctions();

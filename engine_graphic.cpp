@@ -35,6 +35,7 @@ extern "C" {
     _declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
     _declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 }
+extern bool g_vSync;
 
 void InitCom() {
     // COM 라이브러리 초기화
@@ -169,18 +170,22 @@ void PostDraw() {
     if (!g_pD2DDC || !g_isDrawing) return;
 
     HRESULT hr = g_pD2DDC->EndDraw();
-    g_isDrawing = false; // 상태 해제
+    g_isDrawing = false;
 
     if (hr == D2DERR_RECREATE_TARGET) {
         RecreateDevice();
         return;
     }
-    else if (FAILED(hr))
-    {
+    else if (FAILED(hr)) {
         printf("EndDraw Failed: 0x%08X\n", hr);
         return;
     }
-    g_pSwapChain->Present(1, 0);
+
+    hr = g_pSwapChain->Present(g_vSync ? 1 : 0, 0);
+
+    if (FAILED(hr)) {
+        printf("Present Failed: 0x%08X\n", hr);
+    }
 }
 
 void ReleaseGraphic() {
