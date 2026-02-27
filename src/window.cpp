@@ -20,6 +20,10 @@ static int IniHandler(
 			cfg->transparent = (std::stoi(value) != 0);
 		else if (std::string(name) == "Title")
 			cfg->title = std::wstring(value, value + strlen(value));
+		else if (std::string(name) == "VSync")
+            cfg->vSync = (std::stoi(value) != 0);
+        else if (std::string(name) == "FPS")
+			cfg->fps = std::stoi(value);
 	} return 1;
 }
 WindowConfig Window::LoadConfig(const wchar_t* path) {
