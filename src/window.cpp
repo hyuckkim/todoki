@@ -1,7 +1,8 @@
 #include "window.h"
+#include <windows.h>
 #include <ini.h>
 #include <string>
-#include <windows.h>
+
 static int IniHandler(
 	void* user,
 	const char* section,
@@ -83,4 +84,34 @@ bool Window::Create(HINSTANCE hInstance,
     UpdateWindow(hwnd);
 
     return true;
+}
+void Window::Drawing(LARGE_INTEGER dt) {
+
+}
+void Window::RunGameLoop() {
+    MSG msg;
+    LARGE_INTEGER freq, lastTime;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&lastTime);
+
+    while (true) {
+        LARGE_INTEGER frameStart;
+        QueryPerformanceCounter(&frameStart);
+
+        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+            if (msg.message == WM_QUIT) break;
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+        else {
+            Drawing(frameStart);
+            if (!config.vSync) {
+                double targetMs = 1000.0 / config.fps;
+                LARGE_INTEGER frameEnd;
+                QueryPerformanceCounter(&frameEnd);
+                double elapsedMs = (double)(frameEnd.QuadPart - frameStart.QuadPart) * 1000.0 / freq.QuadPart;
+                if (elapsedMs < targetMs) Sleep((DWORD)(targetMs - elapsedMs));
+            }
+        }
+    }
 }

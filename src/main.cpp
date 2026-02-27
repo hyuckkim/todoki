@@ -1,6 +1,7 @@
 #include <windows.h>
 #include "window.h"
 #include "luacargo.h"
+#include "graphicengine.h"
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 #ifdef _DEBUG
@@ -18,21 +19,15 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
 	if (!window.Create(hInstance, nCmdShow, cfg)) {
 		return 1;
 	}
+
     LuaCargo lua;
 	lua.Init("main.lua");
 
-    MSG msg;
-    while (true) {
-        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
-            if (msg.message == WM_QUIT)
-                break;
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
-        else {
-            Sleep(17);
-        }
-    }
+    GraphicEngine engine(window.GetHandle(), cfg.width, cfg.height);
+    engine.Init();
+
+    window.RunGameLoop();
+    engine.Release();
 
     return 0;
 }

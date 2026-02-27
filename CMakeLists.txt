@@ -1,5 +1,6 @@
 ﻿cmake_minimum_required(VERSION 3.10)
 add_definitions(-DUNICODE -D_UNICODE)
+add_compile_options(/source-charset:utf-8 /execution-charset:utf-8)
 
 project("world")
 
@@ -28,6 +29,18 @@ endif()
 # includes/ 전체 포함
 target_include_directories(world PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/includes"
+)
+
+# directx
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
+target_link_libraries(world PRIVATE
+    d3d11
+    dxgi
+    d2d1
+    dwrite
+    dcomp
+    windowscodecs   # WIC
 )
 
 # soloud
