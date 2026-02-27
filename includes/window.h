@@ -23,7 +23,11 @@ public:
     void RunGameLoop(std::function<void(double dtMs)> onUpdate);
 	HWND GetHandle() const { return hwnd; }
 
+    using MessageCallback = std::function<void(UINT msg, WPARAM wp, LPARAM lp)>;
+    void SetMessageCallback(MessageCallback cb) { messageCallback = cb; }
+
 private:
+    MessageCallback messageCallback;
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
     HWND hwnd = nullptr;
     WindowConfig config;

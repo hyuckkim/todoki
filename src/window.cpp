@@ -36,9 +36,22 @@ WindowConfig Window::LoadConfig(const wchar_t* path) {
 	return cfg;
 }
 LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
-	switch (msg) {
+    Window* pThis = nullptr;
+
+    if (msg == WM_NCCREATE) {
+        CREATESTRUCT* pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
+        pThis = reinterpret_cast<Window*>(pCreate->lpCreateParams);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pThis);
+    }
+    else {
+        pThis = reinterpret_cast<Window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+    }
+    if (pThis && pThis->messageCallback) {
+        pThis->messageCallback(msg, wParam, lParam);
+    }
+
+    switch (msg) {
 	case WM_DESTROY:
-	case WM_QUERYENDSESSION:
 		PostQuitMessage(0);
 		return 0;
 	}
@@ -80,7 +93,7 @@ bool Window::Create(HINSTANCE hInstance,
         cfg.height,
         nullptr, nullptr,
         hInstance,
-        nullptr);
+        this);
 
     if (!hwnd)
         return false;
