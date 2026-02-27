@@ -22,12 +22,13 @@ public:
 private:
     void InitCom();
     void InitD2D();
+	void RecreateDevice();
 
 private:
     HWND m_hwnd;
     int m_width;
     int m_height;
-    bool m_isDrawing = false;
+    bool m_isDrawing = false; 
 
     // Direct2D
     ComPtr<ID2D1Factory1> m_pD2DFactory;

@@ -29,11 +29,22 @@ void GraphicEngine::PostDraw() {
     m_isDrawing = false;
 
     if (hr == D2DERR_RECREATE_TARGET) {
+        RecreateDevice();
         return;
     }
 
     if (FAILED(hr)) printf("EndDraw Failed: 0x%08X\n", hr);
     m_pSwapChain->Present(m_vSync ? 1 : 0, 0);
+}
+
+void GraphicEngine::RecreateDevice() {
+    printf("[Win] Recreating Device due to error...\n");
+    m_pD2DDC.Reset();
+    m_pD2DFactory.Reset();
+    m_pSwapChain.Reset();
+    m_pD3D11Device.Reset();
+
+    InitD2D();
 }
 
 void GraphicEngine::InitCom() {
