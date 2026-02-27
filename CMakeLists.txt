@@ -41,5 +41,19 @@ cmake_policy(POP)
 target_link_libraries(world PRIVATE soloud)
 target_include_directories(world PRIVATE
     external/soloud/include
-    external/inih/
 )
+
+# inih
+target_include_directories(world PRIVATE
+    external/inih
+)
+
+# lua
+add_subdirectory(external/lua)
+target_link_libraries(world PRIVATE lua_static)
+target_include_directories(world PRIVATE external/lua/include)
+
+# sol2
+add_subdirectory(external/sol2)
+target_link_libraries(world PRIVATE sol2)
+target_include_directories(world PRIVATE external/sol2/include)
