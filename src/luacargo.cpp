@@ -1,7 +1,7 @@
 #include <sol/sol.hpp>
 #include "luacargo.h"
 
-bool LuaCargo::Init(const char* entry) {
+bool LuaCargo::Init(const char* entry, const std::vector<LuaBinding>& systems) {
 	lua = sol::state();
 
     lua.open_libraries(
@@ -15,6 +15,13 @@ bool LuaCargo::Init(const char* entry) {
         sol::lib::coroutine,
         sol::lib::os
     );
+
+    for (const auto& system : systems) {
+        if (system.bindFunc) {
+            system.bindFunc(lua, system.name.c_str());
+            printf("[LUA] System '%s' bound successfully.\n", system.name.c_str());
+        }
+    }
 
     auto load_result = lua.script_file(entry, sol::script_pass_on_error);
     if (!load_result.valid()) {

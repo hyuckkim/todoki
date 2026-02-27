@@ -7,6 +7,7 @@
 #include <d2d1_1.h>
 #include <dwrite.h>
 #include <wrl/client.h>
+#include "drawcontext.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -18,6 +19,9 @@ public:
     void PreDraw();
     void PostDraw();
     void Release();
+
+    void Resize(int width, int height);
+    void BindToLua(sol::state& lua, const char* name);
 
 private:
     void InitCom();
@@ -44,4 +48,5 @@ private:
     ComPtr<IDCompositionVisual> m_pDCompVisual;
 
     bool m_vSync = true;
+	std::unique_ptr<DrawContext> m_drawContext;
 };

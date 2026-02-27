@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <string>
+#include <functional>
 
 struct WindowConfig {
     int width = 800;
@@ -19,13 +20,11 @@ public:
     bool Create(HINSTANCE hInstance,
         int nCmdShow,
         const WindowConfig& cfg);
-    void RunGameLoop();
+    void RunGameLoop(std::function<void(double dtMs)> onUpdate);
 	HWND GetHandle() const { return hwnd; }
 
 private:
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
     HWND hwnd = nullptr;
     WindowConfig config;
-
-    void Drawing(LARGE_INTEGER dt);
 };

@@ -2,11 +2,18 @@
 #include <sol/sol.hpp>
 #include <string>
 #include <optional>
+#include <functional>
+
+struct LuaBinding {
+    std::function<void(sol::state&, const char*)> bindFunc;
+    std::string name;
+};
 
 class LuaCargo
-{
+{ 
 public:
-	bool Init(const char* entry);
+	bool Init(const char* entry, const std::vector<LuaBinding>& systems = {});
+
 	template<typename T = void, typename... Args>
 	T Call(const char* func, Args&&... args) {
         sol::protected_function f = lua[func];
@@ -15,7 +22,7 @@ public:
         if constexpr (std::is_void_v<T>) {
             if (f.valid()) {
                 auto result = f(std::forward<Args>(args)...);
-                HandleLuaResult(func, result);
+                HandleResult(func, result);
             }
         }
         // 리턴 타입이 있는 경우 (Nullable)
@@ -27,7 +34,7 @@ public:
                 return std::optional<T>(result.get<T>());
             }
             else {
-                HandleLuaResult(func, result);
+                HandleResult(func, result);
                 return std::optional<T>(std::nullopt);
             }
         }

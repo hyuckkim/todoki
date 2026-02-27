@@ -6,6 +6,7 @@
 #include <dcomp.h>
 #include <wrl/client.h>
 #include <stdio.h>
+#include "drawcontext.h"
 
 GraphicEngine::GraphicEngine(HWND hwnd, int width, int height)
     : m_hwnd(hwnd), m_width(width), m_height(height) {
@@ -14,6 +15,7 @@ GraphicEngine::GraphicEngine(HWND hwnd, int width, int height)
 void GraphicEngine::Init() {
     InitCom();
     InitD2D();
+	m_drawContext.reset(new DrawContext(m_pD2DDC.Get(), m_pD2DFactory.Get()));
 }
 
 void GraphicEngine::PreDraw() {
@@ -166,6 +168,66 @@ void GraphicEngine::InitD2D() {
     m_pD2DDC->SetTarget(targetBitmap.Get());
 }
 
+void GraphicEngine::Resize(int width, int height) {
+    if (!m_pSwapChain) return;
+    if (width == 0 || height == 0) return;
+
+    m_width = width;
+    m_height = height;
+
+    m_pD2DDC->SetTarget(nullptr);
+
+    HRESULT hr = m_pSwapChain->ResizeBuffers(
+        0,
+        width,
+        height,
+        DXGI_FORMAT_UNKNOWN,
+        0
+    );
+
+    if (FAILED(hr)) {
+        printf("ResizeBuffers failed: 0x%08X\n", hr);
+        return;
+    }
+
+    ComPtr<IDXGISurface> surface;
+    hr = m_pSwapChain->GetBuffer(
+        0,
+        IID_PPV_ARGS(&surface)
+    );
+
+    if (FAILED(hr)) {
+        printf("GetBuffer failed: 0x%08X\n", hr);
+        return;
+    }
+
+    D2D1_BITMAP_PROPERTIES1 props =
+        D2D1::BitmapProperties1(
+            D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+            D2D1::PixelFormat(
+                DXGI_FORMAT_B8G8R8A8_UNORM,
+                D2D1_ALPHA_MODE_PREMULTIPLIED
+            )
+        );
+
+    ComPtr<ID2D1Bitmap1> bitmap;
+    hr = m_pD2DDC->CreateBitmapFromDxgiSurface(
+        surface.Get(),
+        &props,
+        &bitmap
+    );
+
+    if (FAILED(hr)) {
+        printf("CreateBitmapFromDxgiSurface failed: 0x%08X\n", hr);
+        return;
+    }
+
+    m_pD2DDC->SetTarget(bitmap.Get());
+
+    if (m_pDCompDevice)
+        m_pDCompDevice->Commit();
+}
+
 void GraphicEngine::Release() {
     if (m_pD2DDC) m_pD2DDC->SetTarget(nullptr);
     m_pDCompVisual.Reset();
@@ -178,4 +240,8 @@ void GraphicEngine::Release() {
     m_pDWriteFactory.Reset();
     m_pD2DFactory.Reset();
     CoUninitialize();
+}
+
+void GraphicEngine::BindToLua(sol::state& lua, const char* name) {
+	m_drawContext.get()->BindGlobal(lua, name);
 }

@@ -14,19 +14,30 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     }
 #endif
 
-	Window window;
-	WindowConfig cfg = Window::LoadConfig(L"config.ini");
-	if (!window.Create(hInstance, nCmdShow, cfg)) {
-		return 1;
-	}
-
-    LuaCargo lua;
-	lua.Init("main.lua");
+    Window window;
+    WindowConfig cfg = Window::LoadConfig(L"config.ini");
+    if (!window.Create(hInstance, nCmdShow, cfg)) {
+        return 1;
+    }
 
     GraphicEngine engine(window.GetHandle(), cfg.width, cfg.height);
     engine.Init();
 
-    window.RunGameLoop();
+    std::vector<LuaBinding> systems = {
+        LuaBinding([&](sol::state& s, const char* n) { engine.BindToLua(s, n); }, "g"),
+    };
+
+    LuaCargo lua;
+    lua.Init("main.lua", systems);
+
+     
+    lua.Call("Init");
+    window.RunGameLoop([&](double dtMs) {
+        engine.PreDraw();
+		lua.Call("Update", dtMs);
+		lua.Call("Draw");
+        engine.PostDraw();
+    });
     engine.Release();
 
     return 0;
