@@ -3,8 +3,10 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+#include <ini.h>
+#include <windows.h>
 
-int main()
+int test()
 {
     SoLoud::Soloud soloud;
 

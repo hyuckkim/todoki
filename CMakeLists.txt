@@ -1,26 +1,36 @@
-﻿# CMakeList.txt: world에 대한 CMake 프로젝트, 여기에 소스를 포함하고
-# 프로젝트 특정 논리를 정의합니다.
-#
-cmake_minimum_required (VERSION 3.10)
+﻿cmake_minimum_required(VERSION 3.10)
+add_definitions(-DUNICODE -D_UNICODE)
 
-# 지원되는 경우 MSVC 컴파일러에 대해 핫 다시 로드 사용하도록 설정합니다.
+project("world")
+
+# MSVC 핫 리로드 설정
 if (POLICY CMP0141)
   cmake_policy(SET CMP0141 NEW)
-  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
+  set(CMAKE_MSVC_DEBUG_INFORMATION_FORMAT
+      "$<IF:$<AND:$<C_COMPILER_ID:MSVC>,$<CXX_COMPILER_ID:MSVC>>,$<$<CONFIG:Debug,RelWithDebInfo>:EditAndContinue>,$<$<CONFIG:Debug,RelWithDebInfo>:ProgramDatabase>>")
 endif()
 
-project ("world")
+# src/ 내부 모든 cpp 파일 재귀적으로 찾기
+file(GLOB_RECURSE SRC_FILES "src/*.cpp")
 
-# 이 프로젝트의 실행 파일에 소스를 추가합니다.
-add_executable (world "world.cpp" "world.h")
+# 실행 파일 생성
+add_executable(world WIN32
+    ${SRC_FILES}
 
+    "external/inih/ini.c"
+) 
+
+# C++20 설정
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET world PROPERTY CXX_STANDARD 20)
-endif()
+endif() 
 
-# TODO: 필요한 경우 테스트를 추가하고 대상을 설치합니다.
+# includes/ 전체 포함
+target_include_directories(world PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/includes"
+)
 
-
+# soloud
 cmake_policy(PUSH)
 cmake_policy(VERSION 3.10)
 set(SOLOUD_BACKEND_SDL2 OFF CACHE BOOL "" FORCE)
@@ -31,4 +41,5 @@ cmake_policy(POP)
 target_link_libraries(world PRIVATE soloud)
 target_include_directories(world PRIVATE
     external/soloud/include
+    external/inih/
 )
