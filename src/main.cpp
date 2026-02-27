@@ -23,9 +23,13 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine
     GraphicEngine engine(window.GetHandle(), cfg.width, cfg.height);
     engine.Init();
 
+#define BIND(obj, func, name) \
+    LuaBinding([&](sol::state& s, const char* n) { (obj).func(s, n); }, name)
+
     std::vector<LuaBinding> systems = {
-        LuaBinding([&](sol::state& s, const char* n) { engine.BindToLua(s, n); }, "g"),
+        BIND(engine, BindToLua, "g"),
     };
+#undef BIND
 
     LuaCargo lua;
     lua.Init("main.lua", systems);
