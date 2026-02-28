@@ -13,6 +13,39 @@
 
 using Microsoft::WRL::ComPtr;
 
+class CustomFontFileEnumerator : public IDWriteFontFileEnumerator {
+    ULONG m_refCount;
+    IDWriteFactory* m_factory;
+    IDWriteFontFile* m_currentFile;
+    std::wstring m_filePath;
+    bool m_hasNext;
+
+public:
+    CustomFontFileEnumerator(IDWriteFactory* factory, const std::wstring& path);
+    ~CustomFontFileEnumerator();
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override;
+    ULONG STDMETHODCALLTYPE AddRef() override;
+    ULONG STDMETHODCALLTYPE Release() override;
+    HRESULT STDMETHODCALLTYPE MoveNext(BOOL* hasNext) override;
+    HRESULT STDMETHODCALLTYPE GetCurrentFontFile(IDWriteFontFile** fontFile) override;
+};
+
+// Loader 선언
+class CustomFontCollectionLoader : public IDWriteFontCollectionLoader {
+public:
+    // 헤더에는 선언만 합니다.
+    static CustomFontCollectionLoader* Instance;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override;
+    ULONG STDMETHODCALLTYPE AddRef() override;
+    ULONG STDMETHODCALLTYPE Release() override;
+    HRESULT STDMETHODCALLTYPE CreateEnumeratorFromKey(
+        IDWriteFactory* factory,
+        const void* key,
+        UINT32 keySize,
+        IDWriteFontFileEnumerator** enumerator) override;
+};
 class ResourceHub {
 public:
     static ResourceHub& Instance();
@@ -62,4 +95,5 @@ private:
     std::vector<std::wstring> m_fileFonts;
     std::vector<HANDLE>       m_memFonts;
     std::map<std::string, int> m_fontCache;
+    IDWriteFontCollection* m_customFontCollection = nullptr;
 };

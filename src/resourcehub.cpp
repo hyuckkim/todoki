@@ -1,6 +1,62 @@
 #include "ResourceHub.h"
 #include <Windows.h>
+#include <dwrite_3.h>
 #include "util.h"
+
+CustomFontCollectionLoader* CustomFontCollectionLoader::Instance = new CustomFontCollectionLoader();
+
+// --- CustomFontFileEnumerator 구현 ---
+CustomFontFileEnumerator::CustomFontFileEnumerator(IDWriteFactory* factory, const std::wstring& path)
+    : m_factory(factory), m_filePath(path), m_refCount(1), m_currentFile(nullptr), m_hasNext(true) {
+}
+
+CustomFontFileEnumerator::~CustomFontFileEnumerator() {
+    if (m_currentFile) m_currentFile->Release();
+}
+
+HRESULT STDMETHODCALLTYPE CustomFontFileEnumerator::QueryInterface(REFIID riid, void** ppv) {
+    if (riid == __uuidof(IDWriteFontFileEnumerator) || riid == __uuidof(IUnknown)) {
+        *ppv = this; AddRef(); return S_OK;
+    }
+    return E_NOINTERFACE;
+}
+
+ULONG STDMETHODCALLTYPE CustomFontFileEnumerator::AddRef() { return InterlockedIncrement(&m_refCount); }
+ULONG STDMETHODCALLTYPE CustomFontFileEnumerator::Release() {
+    ULONG res = InterlockedDecrement(&m_refCount);
+    if (res == 0) delete this; return res;
+}
+
+HRESULT STDMETHODCALLTYPE CustomFontFileEnumerator::MoveNext(BOOL* hasNext) {
+    *hasNext = m_hasNext;
+    if (m_hasNext) {
+        m_factory->CreateFontFileReference(m_filePath.c_str(), nullptr, &m_currentFile);
+        m_hasNext = false;
+    }
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE CustomFontFileEnumerator::GetCurrentFontFile(IDWriteFontFile** fontFile) {
+    if (!m_currentFile) return E_FAIL;
+    *fontFile = m_currentFile; (*fontFile)->AddRef(); return S_OK;
+}
+
+// --- CustomFontCollectionLoader 구현 ---
+HRESULT STDMETHODCALLTYPE CustomFontCollectionLoader::QueryInterface(REFIID riid, void** ppv) {
+    if (riid == __uuidof(IDWriteFontCollectionLoader) || riid == __uuidof(IUnknown)) {
+        *ppv = this; return S_OK;
+    }
+    return E_NOINTERFACE;
+}
+
+ULONG STDMETHODCALLTYPE CustomFontCollectionLoader::AddRef() { return 1; }
+ULONG STDMETHODCALLTYPE CustomFontCollectionLoader::Release() { return 1; }
+
+HRESULT STDMETHODCALLTYPE CustomFontCollectionLoader::CreateEnumeratorFromKey(
+    IDWriteFactory* factory, const void* key, UINT32 keySize, IDWriteFontFileEnumerator** enumerator) {
+    *enumerator = new CustomFontFileEnumerator(factory, (const wchar_t*)key);
+    return S_OK;
+}
 
 static std::string MakeFontKey(const std::string& path,
     const std::string& family,
@@ -124,31 +180,53 @@ int ResourceHub::LoadSystemFont(const std::string& name,
 
     return id;
 }
-int ResourceHub::LoadFontFile(const std::string& path,
-    const std::string& family,
-    float size)
+int ResourceHub::LoadFontFile(const std::string& path, const std::string& family, float size)
 {
+    // 1. 캐시 체크 (무거운 로직 방지)
     int weight = 400;
-
     std::string key = MakeFontKey(path, family, size, weight);
-
-    auto it = m_fontCache.find(key);
-    if (it != m_fontCache.end())
-        return it->second;
-
-    if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES)
-        return -1;
+    if (m_fontCache.count(key)) return m_fontCache[key];
 
     std::wstring wPath = to_wstring(path);
+    std::wstring wFamily = to_wstring(family);
 
-    if (AddFontResourceExW(wPath.c_str(), FR_PRIVATE, 0) <= 0)
-        return -1;
+    // 2. 로더 등록 (이미 등록되어 있어도 안전함)
+    m_dwrite->RegisterFontCollectionLoader(CustomFontCollectionLoader::Instance);
 
-    m_fileFonts.push_back(wPath);
+    // 3. 커스텀 컬렉션 생성
+    // 키 값으로 '경로 문자열' 자체를 넘깁니다. (널 종료 문자 포함 필수)
+    IDWriteFontCollection* pCollection = nullptr;
+    HRESULT hr = m_dwrite->CreateCustomFontCollection(
+        CustomFontCollectionLoader::Instance,
+        wPath.c_str(),
+        (uint32_t)((wPath.length() + 1) * sizeof(wchar_t)),
+        &pCollection
+    );
 
-    int id = LoadSystemFont(family, size, weight);
-    if (id >= 0)
-        m_fontCache[key] = id;
+    if (FAILED(hr)) return -1;
+
+    // 4. 텍스트 포맷 생성
+    IDWriteTextFormat* fmt = nullptr;
+    hr = m_dwrite->CreateTextFormat(
+        wFamily.c_str(),
+        pCollection,  // 생성한 커스텀 컬렉션을 주입!
+        (DWRITE_FONT_WEIGHT)weight,
+        DWRITE_FONT_STYLE_NORMAL,
+        DWRITE_FONT_STRETCH_NORMAL,
+        size,
+        L"ko-kr",
+        &fmt
+    );
+
+    // 컬렉션은 포맷 내부에서 AddRef 되므로 여기서 Release 해도 안전함
+    if (pCollection) pCollection->Release();
+
+    if (FAILED(hr)) return -1;
+
+    // 5. 결과 저장 및 반환
+    int id = (int)m_fonts.size();
+    m_fonts.push_back(fmt);
+    m_fontCache[key] = id;
 
     return id;
 }
