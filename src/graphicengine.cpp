@@ -7,11 +7,13 @@
 #include <wrl/client.h>
 #include <stdio.h>
 #include "drawcontext.h"
+#include "window.h"
 
-bool GraphicEngine::Init(HWND hwnd, int width, int height) {
+bool GraphicEngine::Init(HWND hwnd, WindowConfig cfg) {
     m_hwnd = hwnd;
-    m_width = width;
-    m_height = height;
+    m_width = cfg.width;
+    m_height = cfg.height;
+	m_vSync = cfg.vSync;
 
     if (!InitCom()) return false;
     if (!InitD2D()) return false;

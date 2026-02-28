@@ -16,7 +16,7 @@ bool App::Init(HINSTANCE hInstance, int nCmdShow) {
         return false;
     }
 
-    if (!m_engine.Init(m_window.GetHandle(), cfg.width, cfg.height)) {
+    if (!m_engine.Init(m_window.GetHandle(), cfg)) {
         return false;
     }
 

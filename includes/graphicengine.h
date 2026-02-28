@@ -8,12 +8,13 @@
 #include <dwrite.h>
 #include <wrl/client.h>
 #include "drawcontext.h"
+#include "window.h"
 
 using Microsoft::WRL::ComPtr;
 
 class GraphicEngine {
 public:
-    bool Init(HWND hwnd, int width = 800, int height = 600);
+    bool Init(HWND hwnd, WindowConfig cfg);
     void PreDraw();
     void PostDraw();
     void Release();
