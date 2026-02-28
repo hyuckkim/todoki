@@ -2,6 +2,7 @@
 #include "window.h"
 #include "graphicengine.h"
 #include "luacargo.h"
+#include "resourcehub.h"
 #include <vector>
 
 class App {

@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include "drawcontext.h"
 #include "window.h"
+#include "resourcehub.h"
 
 bool GraphicEngine::Init(HWND hwnd, WindowConfig cfg) {
     m_hwnd = hwnd;
@@ -19,6 +20,8 @@ bool GraphicEngine::Init(HWND hwnd, WindowConfig cfg) {
     if (!InitD2D()) return false;
 
     m_drawContext.reset(new DrawContext(m_pD2DDC.Get(), m_pD2DFactory.Get()));
+    ResourceHub::Instance().Init(
+		m_pD2DDC.Get(), m_pDWriteFactory.Get(), m_pWICFactory.Get());
     return true;
 }
 
@@ -147,6 +150,7 @@ void GraphicEngine::Resize(int width, int height) {
 }
 
 void GraphicEngine::Release() {
+    ResourceHub::Instance().Shutdown();
     if (m_pD2DDC) m_pD2DDC->SetTarget(nullptr);
     m_pDCompVisual.Reset();
     m_pDCompTarget.Reset();

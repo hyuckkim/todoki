@@ -1,6 +1,8 @@
 #include "DrawContext.h"
 #include <d2d1_1.h>
 #include <wrl/client.h>
+#include "resourcehub.h"
+#include "util.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -64,24 +66,23 @@ void DrawContext::polygon(sol::table vertices) {
 }
 // --- 폰트/텍스트 그리기 ---
 void DrawContext::text(int fontId, std::string str, float x, float y) {
-    throw "not implemented yet";
-    /*
-    if (fontId < 0 || fontId >= g_fontTable.size() || !m_rt || !m_brush) return;
+    if (!m_rt || !m_brush) return;
 
-    std::wstring wstr(str.begin(), str.end()); // 간단한 string -> wstring 변환
-    auto fmt = g_fontTable[fontId].Get();
-
-    // 텍스트 영역 (충분히 크게 설정하거나 레이아웃 계산 필요)
-    D2D1_RECT_F layoutRect = D2D1::RectF(x, y, 10000.0f, 10000.0f);
+    IDWriteTextFormat* pFormat = ResourceHub::Instance().GetFont(fontId);
+    if (!pFormat) return;
+    std::wstring wstr = ToWString(str);
+    D2D1_RECT_F layoutRect = D2D1::RectF(
+        x, y,
+        x + 10000.0f, y + 10000.0f
+    );
 
     m_rt->DrawText(
         wstr.c_str(),
-        (UINT32)wstr.length(),
-        fmt,
+        static_cast<UINT32>(wstr.length()),
+        pFormat,
         layoutRect,
         m_brush.Get()
     );
-    */
 }
 
 // --- 이미지/비트맵 그리기 ---
@@ -91,34 +92,18 @@ void DrawContext::image(int id, float dx, float dy,
     sol::optional<float> sw, sol::optional<float> sh,
     sol::optional<float> alpha)
 {
-    throw "not implemented yet";
-    /*
-    if (id < 0 || id >= g_bitmapTable.size() || !m_rt) return;
-
-    auto bmp = g_bitmapTable[id].Get();
+	ID2D1Bitmap* bmp = ResourceHub::Instance().GetBitmap(id);
+    if (!bmp || !m_rt) return;
     auto size = bmp->GetSize();
-
-    // 소스 영역 결정 (자르기)
-    float sX = sx.value_or(0.0f);
-    float sY = sy.value_or(0.0f);
+    float sX = sx.value_or(0);
+    float sY = sy.value_or(0);
     float sW = sw.value_or(size.width - sX);
     float sH = sh.value_or(size.height - sY);
-
-    // 출력 영역 결정 (크기 조절)
-    float dW = dw.value_or(sW);
-    float dH = dh.value_or(sH);
-
-    D2D1_RECT_F srcRect = D2D1::RectF(sX, sY, sX + sW, sY + sH);
-    D2D1_RECT_F destRect = D2D1::RectF(dx, dy, dx + dW, dy + dH);
-
-    m_rt->DrawBitmap(
-        bmp,
-        destRect,
+    m_rt->DrawBitmap(bmp,
+        D2D1::RectF(dx, dy, dx + dw.value_or(sW), dy + dh.value_or(sH)),
         alpha.value_or(m_globalAlpha),
-        D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR, // 픽셀 아트 스타일
-        &srcRect
-    );
-    */
+        D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+		D2D1::RectF(sX, sY, sX + sW, sY + sH));
 }
 // --- 상태 관리 ---
 void DrawContext::push() {
@@ -183,14 +168,7 @@ std::shared_ptr<DrawContext> DrawContext::createOffscreen(float w, float h) {
     HRESULT hr = m_rt->CreateCompatibleRenderTarget(D2D1::SizeF(w, h), &pRT);
 
     if (FAILED(hr)) return nullptr;
-
-    // 2. 새로운 DrawContext 객체 생성 (shared_ptr)
-    // 이 새로운 컨텍스트는 위에서 만든 pRT를 자기의 m_dc(또는 m_rt)로 삼습니다.
     auto offscreenCtx = std::make_shared<DrawContext>(pRT.Get(), m_factory.Get());
-
-    // 3. (옵션) 나중에 화면에 그리기 위해 pRT를 따로 보관하거나 
-    // 나중에 GetBitmap()을 호출할 수 있는 로직을 연결해줍니다.
-    // offscreenCtx->m_isOffscreen = true; 
 
     return offscreenCtx;
 }
