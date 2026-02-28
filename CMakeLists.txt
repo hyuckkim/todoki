@@ -46,6 +46,7 @@ target_link_libraries(world PRIVATE
 # soloud
 cmake_policy(PUSH)
 cmake_policy(VERSION 3.10)
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10)
 set(SOLOUD_BACKEND_SDL2 OFF CACHE BOOL "" FORCE)
 set(SOLOUD_BACKEND_WASAPI ON CACHE BOOL "" FORCE)
 add_subdirectory(external/soloud/contrib)
