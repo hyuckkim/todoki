@@ -251,7 +251,7 @@ bool Window::Create(HINSTANCE hInstance,
     {
         // Use layered window for per-pixel alpha and reliable click-through handling
         style = WS_POPUP;
-        exStyle = WS_EX_LAYERED;
+        exStyle = WS_EX_LAYERED | WS_EX_NOREDIRECTIONBITMAP;
     }
     else
     {
