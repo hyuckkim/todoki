@@ -1,5 +1,5 @@
 #pragma once
-#include <sol/sol.hpp>
+#include "includesol.h"
 #include <string>
 #include <optional>
 #include <functional>

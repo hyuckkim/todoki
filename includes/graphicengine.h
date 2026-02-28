@@ -13,9 +13,7 @@ using Microsoft::WRL::ComPtr;
 
 class GraphicEngine {
 public:
-    GraphicEngine(HWND hwnd, int width = 800, int height = 600);
-
-    void Init();
+    bool Init(HWND hwnd, int width = 800, int height = 600);
     void PreDraw();
     void PostDraw();
     void Release();
@@ -24,11 +22,10 @@ public:
     void BindToLua(sol::state& lua, const char* name);
 
 private:
-    void InitCom();
-    void InitD2D();
+    bool InitCom();
+    bool InitD2D();
 	void RecreateDevice();
 
-private:
     HWND m_hwnd;
     int m_width;
     int m_height;
@@ -47,6 +44,6 @@ private:
     ComPtr<IDCompositionTarget> m_pDCompTarget;
     ComPtr<IDCompositionVisual> m_pDCompVisual;
 
-    bool m_vSync = true;
+    bool m_vSync = false;
 	std::unique_ptr<DrawContext> m_drawContext;
 };

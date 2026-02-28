@@ -1,4 +1,4 @@
-#include <sol/sol.hpp>
+#include "includesol.h"
 #include "luacargo.h"
 
 bool LuaCargo::Init(const char* entry, const std::vector<LuaBinding>& systems) {

@@ -8,14 +8,16 @@
 #include <stdio.h>
 #include "drawcontext.h"
 
-GraphicEngine::GraphicEngine(HWND hwnd, int width, int height)
-    : m_hwnd(hwnd), m_width(width), m_height(height) {
-}
+bool GraphicEngine::Init(HWND hwnd, int width, int height) {
+    m_hwnd = hwnd;
+    m_width = width;
+    m_height = height;
 
-void GraphicEngine::Init() {
-    InitCom();
-    InitD2D();
-	m_drawContext.reset(new DrawContext(m_pD2DDC.Get(), m_pD2DFactory.Get()));
+    if (!InitCom()) return false;
+    if (!InitD2D()) return false;
+
+    m_drawContext.reset(new DrawContext(m_pD2DDC.Get(), m_pD2DFactory.Get()));
+    return true;
 }
 
 void GraphicEngine::PreDraw() {
@@ -40,108 +42,64 @@ void GraphicEngine::PostDraw() {
 }
 
 void GraphicEngine::RecreateDevice() {
-    printf("[Win] Recreating Device due to error...\n");
+    printf("[Win] Recreating Device...\n");
     m_pD2DDC.Reset();
     m_pD2DFactory.Reset();
     m_pSwapChain.Reset();
     m_pD3D11Device.Reset();
-
     InitD2D();
 }
 
-void GraphicEngine::InitCom() {
-    HRESULT hr = 0;
+bool GraphicEngine::InitCom() {
+    if (FAILED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED))) return false;
 
-    // COM 라이브러리 초기화
-    hr = CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
-    if (FAILED(hr)) {
-        printf("COM Initialization Failed: 0x%08X\n", hr);
-        return;
-    }
+    if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
+        reinterpret_cast<IUnknown**>(m_pDWriteFactory.ReleaseAndGetAddressOf())))) return false;
 
-    // DirectWrite Factory 생성
-    // .ReleaseAndGetAddressOf()를 사용하면 혹시 모를 기존 객체를 해제하고 주소를 가져옵니다.
-    hr = DWriteCreateFactory(
-        DWRITE_FACTORY_TYPE_SHARED,
-        __uuidof(IDWriteFactory),
-        reinterpret_cast<IUnknown**>(m_pDWriteFactory.ReleaseAndGetAddressOf())
-    );
-    if (FAILED(hr)) printf("DWrite Factory Creation Failed\n");
+    if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(m_pWICFactory.ReleaseAndGetAddressOf())))) return false;
 
-    // WIC Imaging Factory 생성
-    hr = CoCreateInstance(
-        CLSID_WICImagingFactory,
-        NULL,
-        CLSCTX_INPROC_SERVER,
-        IID_PPV_ARGS(m_pWICFactory.ReleaseAndGetAddressOf())
-    );
-    if (FAILED(hr)) printf("WIC Factory Creation Failed\n");
+    return true;
 }
 
-void GraphicEngine::InitD2D() {
-    HRESULT hr;
+bool GraphicEngine::InitD2D() {
 
-    // 1. D2D Factory 생성
-    hr = D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED,
-        __uuidof(ID2D1Factory1),
-        (void**)m_pD2DFactory.GetAddressOf());
-    if (FAILED(hr)) { printf("D2D Factory creation failed: 0x%08X\n", hr); return; }
+    if (FAILED(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, __uuidof(ID2D1Factory1), (void**)m_pD2DFactory.GetAddressOf()))) return false;
 
-    // 2. D3D11 Device 생성
-    UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+    UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #ifdef _DEBUG
-    creationFlags |= D3D11_CREATE_DEVICE_DEBUG;
+    flags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
-    hr = D3D11CreateDevice(
-        nullptr,
-        D3D_DRIVER_TYPE_HARDWARE,
-        nullptr,
-        creationFlags,
-        nullptr, 0,
-        D3D11_SDK_VERSION,
-        &m_pD3D11Device,
-        nullptr,
-        nullptr);
-    if (FAILED(hr)) { printf("D3D11 Device creation failed: 0x%08X\n", hr); return; }
+    if (FAILED(D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0, D3D11_SDK_VERSION, &m_pD3D11Device, nullptr, nullptr))) return false;
 
     ComPtr<IDXGIDevice> dxgiDevice;
-    hr = m_pD3D11Device.As(&dxgiDevice);
-    if (FAILED(hr)) { printf("Failed to get IDXGIDevice: 0x%08X\n", hr); return; }
+    if (FAILED(m_pD3D11Device.As(&dxgiDevice))) return false;
 
     ComPtr<IDXGIAdapter> dxgiAdapter;
-    hr = dxgiDevice->GetAdapter(&dxgiAdapter);
-    if (FAILED(hr)) { printf("Failed to get IDXGIAdapter: 0x%08X\n", hr); return; }
+    if (FAILED(dxgiDevice->GetAdapter(&dxgiAdapter))) return false;
 
     ComPtr<IDXGIFactory2> dxgiFactory;
-    hr = dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory));
-    if (FAILED(hr)) { printf("Failed to get DXGIFactory2: 0x%08X\n", hr); return; }
+    if (FAILED(dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory)))) return false;
 
     ComPtr<ID2D1Device> d2dDevice;
-    hr = m_pD2DFactory->CreateDevice(dxgiDevice.Get(), &d2dDevice);
-    if (FAILED(hr)) { printf("D2D Device creation failed: 0x%08X\n", hr); return; }
+    if (FAILED(m_pD2DFactory->CreateDevice(dxgiDevice.Get(), &d2dDevice))) return false;
+    if (FAILED(d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &m_pD2DDC))) return false;
 
-    hr = d2dDevice->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &m_pD2DDC);
-    if (FAILED(hr)) { printf("D2D DeviceContext creation failed: 0x%08X\n", hr); return; }
+    DXGI_SWAP_CHAIN_DESC1 scDesc = {};
+    scDesc.Width = m_width;
+    scDesc.Height = m_height;
+    scDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+    scDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    scDesc.BufferCount = 2;
+    scDesc.Scaling = DXGI_SCALING_STRETCH;
+    scDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
+    scDesc.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
+    scDesc.SampleDesc.Count = 1;
 
-    // 7. SwapChain 생성
-    DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-    swapChainDesc.Width = m_width;
-    swapChainDesc.Height = m_height;
-    swapChainDesc.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
-    swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    swapChainDesc.BufferCount = 2;
-    swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
-    swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL;
-    swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
-    swapChainDesc.SampleDesc.Count = 1;
+    if (FAILED(dxgiFactory->CreateSwapChainForComposition(m_pD3D11Device.Get(), &scDesc, nullptr, &m_pSwapChain))) return false;
 
-    hr = dxgiFactory->CreateSwapChainForComposition(m_pD3D11Device.Get(), &swapChainDesc, nullptr, &m_pSwapChain);
-    if (FAILED(hr)) { printf("SwapChain creation failed: 0x%08X\n", hr); return; }
-
-    // 8. DirectComposition 연결
-    hr = DCompositionCreateDevice(dxgiDevice.Get(), IID_PPV_ARGS(&m_pDCompDevice));
-    if (FAILED(hr)) { printf("DComp device creation failed: 0x%08X\n", hr); return; }
+    if (FAILED(DCompositionCreateDevice(dxgiDevice.Get(), IID_PPV_ARGS(&m_pDCompDevice)))) return false;
 
     m_pDCompDevice->CreateTargetForHwnd(m_hwnd, TRUE, &m_pDCompTarget);
     m_pDCompDevice->CreateVisual(&m_pDCompVisual);
@@ -149,83 +107,41 @@ void GraphicEngine::InitD2D() {
     m_pDCompTarget->SetRoot(m_pDCompVisual.Get());
     m_pDCompDevice->Commit();
 
-    // 9. D2D Render Target 설정
     ComPtr<IDXGISurface> surface;
-    hr = m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&surface));
-    if (FAILED(hr)) { printf("GetBuffer failed: 0x%08X\n", hr); return; }
+    if (FAILED(m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&surface)))) return false;
 
-    D2D1_BITMAP_PROPERTIES1 bitmapProps =
-        D2D1::BitmapProperties1(
-            D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-            D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM,
-                D2D1_ALPHA_MODE_PREMULTIPLIED)
-        );
+    D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
 
     ComPtr<ID2D1Bitmap1> targetBitmap;
-    hr = m_pD2DDC->CreateBitmapFromDxgiSurface(surface.Get(), &bitmapProps, &targetBitmap);
-    if (FAILED(hr)) { printf("CreateBitmapFromDxgiSurface failed: 0x%08X\n", hr); return; }
+    if (FAILED(m_pD2DDC->CreateBitmapFromDxgiSurface(surface.Get(), &props, &targetBitmap))) return false;
 
     m_pD2DDC->SetTarget(targetBitmap.Get());
+    return true;
 }
 
 void GraphicEngine::Resize(int width, int height) {
-    if (!m_pSwapChain) return;
-    if (width == 0 || height == 0) return;
+    if (!m_pSwapChain || width == 0 || height == 0) return;
 
     m_width = width;
     m_height = height;
-
     m_pD2DDC->SetTarget(nullptr);
 
-    HRESULT hr = m_pSwapChain->ResizeBuffers(
-        0,
-        width,
-        height,
-        DXGI_FORMAT_UNKNOWN,
-        0
-    );
-
-    if (FAILED(hr)) {
-        printf("ResizeBuffers failed: 0x%08X\n", hr);
-        return;
-    }
+    if (FAILED(m_pSwapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0))) return;
 
     ComPtr<IDXGISurface> surface;
-    hr = m_pSwapChain->GetBuffer(
-        0,
-        IID_PPV_ARGS(&surface)
-    );
+    if (FAILED(m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&surface)))) return;
 
-    if (FAILED(hr)) {
-        printf("GetBuffer failed: 0x%08X\n", hr);
-        return;
-    }
-
-    D2D1_BITMAP_PROPERTIES1 props =
-        D2D1::BitmapProperties1(
-            D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
-            D2D1::PixelFormat(
-                DXGI_FORMAT_B8G8R8A8_UNORM,
-                D2D1_ALPHA_MODE_PREMULTIPLIED
-            )
-        );
+    D2D1_BITMAP_PROPERTIES1 props = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
 
     ComPtr<ID2D1Bitmap1> bitmap;
-    hr = m_pD2DDC->CreateBitmapFromDxgiSurface(
-        surface.Get(),
-        &props,
-        &bitmap
-    );
-
-    if (FAILED(hr)) {
-        printf("CreateBitmapFromDxgiSurface failed: 0x%08X\n", hr);
-        return;
-    }
+    if (FAILED(m_pD2DDC->CreateBitmapFromDxgiSurface(surface.Get(), &props, &bitmap))) return;
 
     m_pD2DDC->SetTarget(bitmap.Get());
-
-    if (m_pDCompDevice)
-        m_pDCompDevice->Commit();
+    if (m_pDCompDevice) m_pDCompDevice->Commit();
 }
 
 void GraphicEngine::Release() {
@@ -243,5 +159,5 @@ void GraphicEngine::Release() {
 }
 
 void GraphicEngine::BindToLua(sol::state& lua, const char* name) {
-	m_drawContext.get()->BindGlobal(lua, name);
+    if (m_drawContext) m_drawContext->BindGlobal(lua, name);
 }
