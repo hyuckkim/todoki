@@ -12,6 +12,8 @@ struct WindowConfig {
 	std::wstring title = L"Window";
     bool vSync = false;
     int fps = 60;
+    int posX = 200;
+    int posY = 200;
 };
 
 class Window {
