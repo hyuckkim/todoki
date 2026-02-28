@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <string>
 #include <functional>
+#include "includesol.h"
 
 struct WindowConfig {
     int width = 800;
@@ -28,6 +29,8 @@ public:
     void SetMessageCallback(MessageCallback cb) { messageCallback = cb; }
     using HitTestCallback = std::function<bool(int x, int y)>;
     void SetHitTestCallback(HitTestCallback cb) { hitTestCallback = cb; }
+    // Bind window-related input/system info into Lua under the given name
+    void BindToLua(sol::state& lua, const char* name);
 
 private:
     MessageCallback messageCallback;

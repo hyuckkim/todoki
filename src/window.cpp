@@ -5,6 +5,8 @@
 #include <ini.h>
 #include <string>
 #include <functional>
+#include "includesol.h"
+#include <tuple>
 
 static int IniHandler(
 	void* user,
@@ -28,6 +30,86 @@ static int IniHandler(
         else if (std::string(name) == "FPS")
 			cfg->fps = std::stoi(value);
 	} return 1;
+}
+
+void Window::BindToLua(sol::state& lua, const char* name) {
+    sol::table i = lua.create_named_table(name);
+
+    // key state
+    i["key"] = [](int vkey) -> bool {
+        return (GetAsyncKeyState(vkey) & 0x8000) != 0;
+    };
+
+    // mouse info (x, y, left, right)
+    i["mouse"] = [this]() {
+        POINT pt;
+        GetCursorPos(&pt);
+        ScreenToClient(hwnd, &pt);
+
+        bool left = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        bool right = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
+
+        return std::make_tuple(pt.x, pt.y, left, right);
+    };
+
+    i["pos"] = [this]() {
+        RECT rc;
+        GetWindowRect(hwnd, &rc);
+        return std::make_tuple(rc.left, rc.top);
+    };
+
+    i["size"] = [this]() {
+        RECT rc;
+        GetWindowRect(hwnd, &rc);
+        return std::make_tuple((int)(rc.right - rc.left), (int)(rc.bottom - rc.top));
+    };
+
+    i["workArea"] = []() {
+        RECT rc;
+        SystemParametersInfo(SPI_GETWORKAREA, 0, &rc, 0);
+        return std::make_tuple((int)(rc.right - rc.left), (int)(rc.bottom - rc.top));
+    };
+
+    i["screenSize"] = []() {
+        return std::make_tuple(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
+    };
+
+    i["monitors"] = [](sol::this_state ts) {
+        sol::state_view lua(ts);
+        sol::table monitorList = lua.create_table();
+
+        auto callback = [](HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) -> BOOL {
+            auto& list = *reinterpret_cast<sol::table*>(dwData);
+
+            MONITORINFO mi = { sizeof(mi) };
+            if (GetMonitorInfo(hMonitor, &mi)) {
+                sol::state_view lua = list.lua_state();
+                sol::table info = lua.create_table();
+
+                info["x"] = mi.rcMonitor.left;
+                info["y"] = mi.rcMonitor.top;
+                info["w"] = mi.rcMonitor.right - mi.rcMonitor.left;
+                info["h"] = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+                info["workX"] = mi.rcWork.left;
+                info["workY"] = mi.rcWork.top;
+                info["workW"] = mi.rcWork.right - mi.rcWork.left;
+                info["workH"] = mi.rcWork.bottom - mi.rcWork.top;
+
+                list.add(info);
+            }
+            return TRUE;
+        };
+
+        EnumDisplayMonitors(NULL, NULL, (MONITORENUMPROC)+callback, (LPARAM)&monitorList);
+
+        return monitorList;
+    };
+
+    // fps/vsync info from window config
+    i["fpsMode"] = [this]() {
+        return std::make_tuple(config.fps, config.vSync);
+    };
 }
 WindowConfig Window::LoadConfig(const wchar_t* path) {
 	WindowConfig cfg;

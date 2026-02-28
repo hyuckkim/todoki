@@ -39,7 +39,8 @@ void App::SetupBindings() {
 
     m_systems = {
         BIND(m_engine, BindToLua, "g"),
-        BIND(ResourceHub::Instance(), BindLua, "res")
+        BIND(ResourceHub::Instance(), BindLua, "res"),
+		BIND(m_window, BindToLua, "is"),
         // 나중에 추가될 시스템들:
         // BIND(m_sound, BindToLua, "s"),
     };
