@@ -1,0 +1,68 @@
+#pragma once
+#include <d2d1_1.h>
+#include <dwrite.h>
+#include <wrl/client.h>
+#include <vector>
+#include "includesol.h"
+
+using Microsoft::WRL::ComPtr;
+
+// 상태 스택 레이어
+struct StateLayer {
+    D2D1_MATRIX_3X2_F matrix;
+    int clipDepth;
+    float strokeWidth;
+};
+
+class DrawContext {
+public:
+    DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory);
+    ~DrawContext();
+    void BindGlobal(sol::state& lua, const char* name);
+
+    // 기본 그리기 함수
+    void rect(float x, float y, float w, float h, sol::optional<bool> fill);
+    void circle(float x, float y, float r, sol::optional<bool> fill);
+    void polyline(sol::table vertices, sol::optional<bool> closed);
+    void polygon(sol::table vertices);
+    void text(int fontId, std::string str, float x, float y);
+    void image(int id, float dx, float dy, sol::optional<float> dw, sol::optional<float> dh,
+        sol::optional<float> sx, sol::optional<float> sy,
+        sol::optional<float> sw, sol::optional<float> sh, sol::optional<float> alpha);
+
+    // Canvas 자체를 그리기
+    void draw(DrawContext* source, float x, float y, sol::optional<float> w, sol::optional<float> h,
+        sol::optional<float> sx, sol::optional<float> sy,
+        sol::optional<float> sw, sol::optional<float> sh, sol::optional<float> alpha);
+
+    // --- 상태 및 속성 ---
+    void color(float r, float g, float b, sol::optional<float> a);
+    void setStrokeWidth(float width);
+    void setGlobalAlpha(float alpha);
+
+    void push();
+    void pop();
+    void translate(float x, float y);
+    void scale(float sx, float sy, sol::optional<float> ox, sol::optional<float> oy);
+    void clip(float x, float y, float w, float h);
+
+    // --- 시스템 ---
+    void batchBegin();
+    void batchEnd();
+    std::shared_ptr<DrawContext> createOffscreen(float w, float h);
+     
+
+private:
+    ComPtr<ID2D1RenderTarget> m_rt;
+	ComPtr<ID2D1Factory1> m_factory;
+    ComPtr<ID2D1SolidColorBrush> m_brush;
+
+    D2D1_COLOR_F m_color = D2D1::ColorF(1, 1, 1, 1);
+    float m_strokeWidth = 1.0f;
+    float m_globalAlpha = 1.0f;
+    int m_clipCount = 0;
+    std::vector<StateLayer> m_stateStack;
+
+    void updateBrush();
+    bool isBatching = false;
+};

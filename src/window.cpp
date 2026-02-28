@@ -1,0 +1,189 @@
+#include "window.h"
+#include <windows.h>
+#include <windowsx.h>
+#include <cstdio>
+#include <ini.h>
+#include <string>
+#include <functional>
+
+static int IniHandler(
+	void* user,
+	const char* section,
+	const char* name,
+	const char* value) {
+	auto* cfg = reinterpret_cast<WindowConfig*>(user);
+	if (std::string(section) == "Window") {
+		if (std::string(name) == "Width")
+			cfg->width = std::stoi(value);
+		else if (std::string(name) == "Height")
+			cfg->height = std::stoi(value);
+		else if (std::string(name) == "Fullscreen")
+			cfg->fullscreen = (std::stoi(value) != 0);
+		else if (std::string(name) == "Transparent")
+			cfg->transparent = (std::stoi(value) != 0);
+		else if (std::string(name) == "Title")
+			cfg->title = std::wstring(value, value + strlen(value));
+		else if (std::string(name) == "VSync")
+            cfg->vSync = (std::stoi(value) != 0);
+        else if (std::string(name) == "FPS")
+			cfg->fps = std::stoi(value);
+	} return 1;
+}
+WindowConfig Window::LoadConfig(const wchar_t* path) {
+	WindowConfig cfg;
+	int size = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
+	if (size <= 0) return cfg; std::string utf8path(size, '\0');
+	WideCharToMultiByte(CP_UTF8, 0, path, -1, &utf8path[0], size, nullptr, nullptr);
+	utf8path.pop_back(); ini_parse(utf8path.c_str(), IniHandler, &cfg);
+	return cfg;
+}
+LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+    Window* pThis = nullptr;
+
+    if (msg == WM_NCCREATE) {
+        CREATESTRUCT* pCreate = reinterpret_cast<CREATESTRUCT*>(lParam);
+        pThis = reinterpret_cast<Window*>(pCreate->lpCreateParams);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)pThis);
+    }
+    else {
+        pThis = reinterpret_cast<Window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+    }
+    // Handle hit testing for click-through behavior if callback provided
+    if (msg == WM_NCHITTEST && pThis && pThis->hitTestCallback) {
+        // lParam contains screen coordinates
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        // convert to client coordinates
+        POINT client = pt;
+        ScreenToClient(hwnd, &client);
+        bool hit = false;
+        try {
+            hit = pThis->hitTestCallback((int)client.x, (int)client.y);
+        }
+        catch (...) { hit = true; }
+
+
+        if (!hit) {
+            return HTTRANSPARENT;
+        }
+        else {
+            return HTCLIENT;
+        }
+    }
+
+    // Debug mouse message logging (show messages actually received by the window)
+    if (pThis) {
+        switch (msg) {
+        case WM_MOUSEMOVE: {
+
+        } break;
+        case WM_LBUTTONDOWN: {
+
+        } break;
+        case WM_LBUTTONUP: {
+
+        } break;
+        default: break;
+        }
+
+        if (pThis->messageCallback) {
+            pThis->messageCallback(msg, wParam, lParam);
+        }
+    }
+
+    switch (msg) {
+	case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	}
+	return DefWindowProc(hwnd, msg, wParam, lParam);
+}
+bool Window::Create(HINSTANCE hInstance,
+    int nCmdShow,
+    const WindowConfig& cfg)
+{
+    config = cfg;
+
+    WNDCLASS wc = {};
+    wc.lpfnWndProc = Window::WndProc;
+    wc.hInstance = hInstance;
+    wc.lpszClassName = L"DCompWindow";
+    RegisterClass(&wc);
+
+    DWORD style = 0;
+    DWORD exStyle = 0;
+
+    if (cfg.transparent)
+    {
+        // Use layered window for per-pixel alpha and reliable click-through handling
+        style = WS_POPUP;
+        exStyle = WS_EX_LAYERED;
+    }
+    else
+    {
+        style = WS_OVERLAPPEDWINDOW;
+        exStyle = 0;
+    }
+
+    hwnd = CreateWindowEx(
+        exStyle,
+        wc.lpszClassName,
+        cfg.title.c_str(),
+        style,
+        200, 200,
+        cfg.width,
+        cfg.height,
+        nullptr, nullptr,
+        hInstance,
+        this);
+
+    if (!hwnd)
+        return false;
+
+    // For layered windows, ensure layered attributes are set (opaque by default)
+    if (cfg.transparent) {
+        // Set full opacity; actual per-pixel alpha can be applied with UpdateLayeredWindow later
+        SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    }
+
+    ShowWindow(hwnd, nCmdShow);
+    UpdateWindow(hwnd);
+
+    return true;
+}
+void Window::RunGameLoop(std::function<void(double dtMs)> tick) {
+    MSG msg;
+    LARGE_INTEGER freq, lastTime;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&lastTime);
+
+    while (true) {
+        LARGE_INTEGER currentTime;
+        QueryPerformanceCounter(&currentTime);
+
+        double dtMs = (double)(currentTime.QuadPart - lastTime.QuadPart) * 1000.0 / freq.QuadPart;
+
+        if (dtMs > 0) {
+            lastTime = currentTime;
+
+            while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+                if (msg.message == WM_QUIT) return;
+                TranslateMessage(&msg);
+                DispatchMessage(&msg);
+            }
+
+            if (tick) {
+                tick(dtMs);
+            }
+
+            if (!config.vSync) {
+                double targetMs = 1000.0 / config.fps;
+                LARGE_INTEGER frameEnd;
+                QueryPerformanceCounter(&frameEnd);
+                double elapsedMs = (double)(frameEnd.QuadPart - currentTime.QuadPart) * 1000.0 / freq.QuadPart;
+                if (elapsedMs < targetMs) {
+                    Sleep((DWORD)(targetMs - elapsedMs));
+                }
+            }
+        }
+    }
+}

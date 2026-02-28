@@ -1,0 +1,12 @@
+[submodule "external/inih"]
+	path = external/inih
+	url = https://github.com/benhoyt/inih
+[submodule "external/soloud"]
+	path = external/soloud
+	url = https://github.com/jarikomppa/soloud.git
+[submodule "external/lua"]
+	path = external/lua
+	url = https://github.com/walterschell/Lua
+[submodule "external/sol2"]
+	path = external/sol2
+	url = https://github.com/ThePhD/sol2
