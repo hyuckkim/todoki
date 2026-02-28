@@ -40,7 +40,8 @@ void App::SetupBindings() {
     m_systems = {
         BIND(m_engine, BindToLua, "g"),
         BIND(ResourceHub::Instance(), BindLua, "res"),
-		BIND(m_window, BindToLua, "is"),
+		BIND(m_window, BindToLuaInput, "is"),
+		BIND(m_window, BindToLuaSys, "sys"),
         // 나중에 추가될 시스템들:
         // BIND(m_sound, BindToLua, "s"),
     };
@@ -72,6 +73,11 @@ void App::SetupCallbacks() {
             break;
         }
         });
+
+    // Notify engine when window size is changed via Lua sys.size
+    m_window.SetSizeCallback([this](int w, int h) {
+        m_engine.Resize(w, h);
+    });
 
     // Provide hit test callback to window so we can control per-point click-through
     m_window.SetHitTestCallback([this](int x, int y) -> bool {

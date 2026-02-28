@@ -29,12 +29,17 @@ public:
     void SetMessageCallback(MessageCallback cb) { messageCallback = cb; }
     using HitTestCallback = std::function<bool(int x, int y)>;
     void SetHitTestCallback(HitTestCallback cb) { hitTestCallback = cb; }
-    // Bind window-related input/system info into Lua under the given name
-    void BindToLua(sol::state& lua, const char* name);
+    using SizeCallback = std::function<void(int w, int h)>;
+    void SetSizeCallback(SizeCallback cb) { sizeCallback = cb; }
+    // Bind read-only input/state into Lua (name e.g. "is")
+    void BindToLuaInput(sol::state& lua, const char* name);
+    // Bind controllable window/system functions into Lua (name e.g. "sys")
+    void BindToLuaSys(sol::state& lua, const char* name);
 
 private:
     MessageCallback messageCallback;
     HitTestCallback hitTestCallback;
+    SizeCallback sizeCallback;
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
     HWND hwnd = nullptr;
     WindowConfig config;

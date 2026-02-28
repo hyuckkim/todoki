@@ -32,7 +32,7 @@ static int IniHandler(
 	} return 1;
 }
 
-void Window::BindToLua(sol::state& lua, const char* name) {
+void Window::BindToLuaInput(sol::state& lua, const char* name) {
     sol::table i = lua.create_named_table(name);
 
     // key state
@@ -106,9 +106,62 @@ void Window::BindToLua(sol::state& lua, const char* name) {
         return monitorList;
     };
 
-    // fps/vsync info from window config
+    // fps/vsync info from window config (read-only)
     i["fpsMode"] = [this]() {
         return std::make_tuple(config.fps, config.vSync);
+    };
+}
+
+void Window::BindToLuaSys(sol::state& lua, const char* name) {
+    sol::table s = lua.create_named_table(name);
+
+    // set window size
+    s["size"] = [this](int w, int h) {
+        if (hwnd) {
+            SetWindowPos(hwnd, NULL, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
+            config.width = w;
+            config.height = h;
+            if (sizeCallback) sizeCallback(w, h);
+        }
+    };
+
+    // set window position
+    s["pos"] = [this](int x, int y) {
+        if (hwnd) {
+            SetWindowPos(hwnd, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
+        }
+    };
+
+    // cursor show/hide
+    s["showCursor"] = [](bool show) {
+        ShowCursor(show);
+    };
+
+    // set cursor by resource id/name
+    s["cursor"] = [](sol::optional<int> type) {
+        HCURSOR hCursor = LoadCursor(NULL, MAKEINTRESOURCE(type.value_or(32512)));
+        SetCursor(hCursor);
+    };
+
+    // topmost
+    s["topmost"] = [this](bool topmost) {
+        if (hwnd) {
+            HWND hWndInsertAfter = topmost ? HWND_TOPMOST : HWND_NOTOPMOST;
+            SetWindowPos(hwnd, hWndInsertAfter, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+    };
+
+    // open URL
+    s["openURL"] = [](const std::string& url) {
+        if (!url.empty()) {
+            ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
+        }
+    };
+
+    // quit
+    s["quit"] = []() {
+        PostQuitMessage(0);
     };
 }
 WindowConfig Window::LoadConfig(const wchar_t* path) {
