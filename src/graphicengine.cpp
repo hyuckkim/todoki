@@ -15,6 +15,7 @@ bool GraphicEngine::Init(HWND hwnd, WindowConfig cfg) {
     m_width = cfg.width;
     m_height = cfg.height;
 	m_vSync = cfg.vSync;
+    m_useComposition = cfg.transparent;
 
     if (!InitCom()) return false;
     if (!InitD2D()) return false;
@@ -111,15 +112,23 @@ bool GraphicEngine::InitD2D() {
     scDesc.AlphaMode = DXGI_ALPHA_MODE_PREMULTIPLIED;
     scDesc.SampleDesc.Count = 1;
 
-    if (FAILED(dxgiFactory->CreateSwapChainForComposition(m_pD3D11Device.Get(), &scDesc, nullptr, &m_pSwapChain))) return false;
+    HRESULT hr = S_OK;
+    if (m_useComposition) {
+        // For transparent windows we use composition swapchain + DComposition
+        if (FAILED(dxgiFactory->CreateSwapChainForComposition(m_pD3D11Device.Get(), &scDesc, nullptr, &m_pSwapChain))) return false;
 
-    if (FAILED(DCompositionCreateDevice(dxgiDevice.Get(), IID_PPV_ARGS(&m_pDCompDevice)))) return false;
+        if (FAILED(DCompositionCreateDevice(dxgiDevice.Get(), IID_PPV_ARGS(&m_pDCompDevice)))) return false;
 
-    m_pDCompDevice->CreateTargetForHwnd(m_hwnd, TRUE, &m_pDCompTarget);
-    m_pDCompDevice->CreateVisual(&m_pDCompVisual);
-    m_pDCompVisual->SetContent(m_pSwapChain.Get());
-    m_pDCompTarget->SetRoot(m_pDCompVisual.Get());
-    m_pDCompDevice->Commit();
+        m_pDCompDevice->CreateTargetForHwnd(m_hwnd, TRUE, &m_pDCompTarget);
+        m_pDCompDevice->CreateVisual(&m_pDCompVisual);
+        m_pDCompVisual->SetContent(m_pSwapChain.Get());
+        m_pDCompTarget->SetRoot(m_pDCompVisual.Get());
+        m_pDCompDevice->Commit();
+    }
+    else {
+        // For opaque windows create a normal HWND-bound swapchain
+        if (FAILED(dxgiFactory->CreateSwapChainForHwnd(m_pD3D11Device.Get(), m_hwnd, &scDesc, nullptr, nullptr, &m_pSwapChain))) return false;
+    }
 
     ComPtr<IDXGISurface> surface;
     if (FAILED(m_pSwapChain->GetBuffer(0, IID_PPV_ARGS(&surface)))) return false;

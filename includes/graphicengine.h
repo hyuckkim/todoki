@@ -48,6 +48,9 @@ private:
     bool m_vSync = false;
 	std::unique_ptr<DrawContext> m_drawContext;
 
+    // whether we use DComposition (needed for transparent windows)
+    bool m_useComposition = false;
+
     // Tracks whether CoInitializeEx succeeded so we only call CoUninitialize when needed
     bool m_comInitialized = false;
 };

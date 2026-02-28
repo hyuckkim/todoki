@@ -99,8 +99,10 @@ void App::Run() {
         if (m_needReload) {
             Reload();
         }
-        // Update mouse passthrough state before drawing
-        UpdateMousePassthrough();
+        // Update mouse passthrough state before drawing (only if transparency enabled)
+        if (m_window.GetConfig().transparent) {
+            UpdateMousePassthrough();
+        }
 
         m_engine.PreDraw();
         m_lua.Call("Update", dtMs);
