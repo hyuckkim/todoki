@@ -24,4 +24,5 @@ private:
     void SetupBindings();
     void SetupCallbacks();
     void Reload();
+    void UpdateMousePassthrough();
 };

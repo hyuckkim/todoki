@@ -25,9 +25,12 @@ public:
 
     using MessageCallback = std::function<void(UINT msg, WPARAM wp, LPARAM lp)>;
     void SetMessageCallback(MessageCallback cb) { messageCallback = cb; }
+    using HitTestCallback = std::function<bool(int x, int y)>;
+    void SetHitTestCallback(HitTestCallback cb) { hitTestCallback = cb; }
 
 private:
     MessageCallback messageCallback;
+    HitTestCallback hitTestCallback;
     static LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
     HWND hwnd = nullptr;
     WindowConfig config;

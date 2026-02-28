@@ -1,5 +1,7 @@
 #include "window.h"
 #include <windows.h>
+#include <windowsx.h>
+#include <cstdio>
 #include <ini.h>
 #include <string>
 #include <functional>
@@ -46,8 +48,46 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
     else {
         pThis = reinterpret_cast<Window*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
     }
-    if (pThis && pThis->messageCallback) {
-        pThis->messageCallback(msg, wParam, lParam);
+    // Handle hit testing for click-through behavior if callback provided
+    if (msg == WM_NCHITTEST && pThis && pThis->hitTestCallback) {
+        // lParam contains screen coordinates
+        POINT pt = { GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam) };
+        // convert to client coordinates
+        POINT client = pt;
+        ScreenToClient(hwnd, &client);
+        bool hit = false;
+        try {
+            hit = pThis->hitTestCallback((int)client.x, (int)client.y);
+        }
+        catch (...) { hit = true; }
+
+
+        if (!hit) {
+            return HTTRANSPARENT;
+        }
+        else {
+            return HTCLIENT;
+        }
+    }
+
+    // Debug mouse message logging (show messages actually received by the window)
+    if (pThis) {
+        switch (msg) {
+        case WM_MOUSEMOVE: {
+
+        } break;
+        case WM_LBUTTONDOWN: {
+
+        } break;
+        case WM_LBUTTONUP: {
+
+        } break;
+        default: break;
+        }
+
+        if (pThis->messageCallback) {
+            pThis->messageCallback(msg, wParam, lParam);
+        }
     }
 
     switch (msg) {
@@ -74,8 +114,9 @@ bool Window::Create(HINSTANCE hInstance,
 
     if (cfg.transparent)
     {
+        // Use layered window for per-pixel alpha and reliable click-through handling
         style = WS_POPUP;
-        exStyle = WS_EX_NOREDIRECTIONBITMAP;
+        exStyle = WS_EX_LAYERED;
     }
     else
     {
@@ -97,6 +138,12 @@ bool Window::Create(HINSTANCE hInstance,
 
     if (!hwnd)
         return false;
+
+    // For layered windows, ensure layered attributes are set (opaque by default)
+    if (cfg.transparent) {
+        // Set full opacity; actual per-pixel alpha can be applied with UpdateLayeredWindow later
+        SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    }
 
     ShowWindow(hwnd, nCmdShow);
     UpdateWindow(hwnd);

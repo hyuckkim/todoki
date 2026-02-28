@@ -14,8 +14,8 @@ class LuaCargo
 public:
 	bool Init(const char* entry, const std::vector<LuaBinding>& systems = {});
 
-	template<typename T = void, typename... Args>
-	T Call(const char* func, Args&&... args) {
+    template<typename T = void, typename... Args>
+    std::conditional_t<std::is_void_v<T>, void, std::optional<T>> Call(const char* func, Args&&... args) {
         sol::protected_function f = lua[func];
 
         // 리턴 타입이 void인 경우

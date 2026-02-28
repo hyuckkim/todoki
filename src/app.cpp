@@ -29,7 +29,6 @@ bool App::Init(HINSTANCE hInstance, int nCmdShow) {
     if (!m_lua.Init("main.lua", m_systems)) {
         return false;
     }
-
     m_lua.Call("Init");
     return true;
 }
@@ -72,6 +71,12 @@ void App::SetupCallbacks() {
             break;
         }
         });
+
+    // Provide hit test callback to window so we can control per-point click-through
+    m_window.SetHitTestCallback([this](int x, int y) -> bool {
+        auto res = m_lua.Call<bool>("CheckHit", (double)x, (double)y);
+        return res.value_or(false);
+    });
 }
 
 void App::Reload() {
@@ -94,10 +99,51 @@ void App::Run() {
         if (m_needReload) {
             Reload();
         }
+        // Update mouse passthrough state before drawing
+        UpdateMousePassthrough();
 
         m_engine.PreDraw();
         m_lua.Call("Update", dtMs);
         m_lua.Call("Draw");
         m_engine.PostDraw();
         });
+}
+
+void App::UpdateMousePassthrough() {
+    static POINT lastPt = { -1, -1 };
+    POINT currPt;
+    if (!GetCursorPos(&currPt)) return;
+    if (currPt.x == lastPt.x && currPt.y == lastPt.y) return;
+    lastPt = currPt;
+
+    HWND hwnd = m_window.GetHandle();
+    if (!hwnd) return;
+
+    POINT clientPt = currPt;
+    if (!ScreenToClient(hwnd, &clientPt)) return;
+
+    auto res = m_lua.Call<bool>("CheckHit", (double)clientPt.x, (double)clientPt.y);
+    bool is_hit = res.value_or(false);
+
+    static int last_hit_state = -1; // -1 = uninitialized, 0 = not clickable, 1 = clickable
+
+    LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+    bool current_clickable = (exStyle & WS_EX_TRANSPARENT) == 0;
+    if (last_hit_state == -1) {
+        // initialize to actual window state
+        last_hit_state = current_clickable ? 1 : 0;
+    }
+
+    if (is_hit != (last_hit_state != 0)) {
+        if (is_hit) {
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle & ~WS_EX_TRANSPARENT);
+        }
+        else {
+            SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT);
+        }
+        // apply style change
+        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+        last_hit_state = is_hit ? 1 : 0;
+    }
 }
