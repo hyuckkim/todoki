@@ -18,6 +18,12 @@ ResourceHub& ResourceHub::Instance()
     return inst;
 }
 
+ResourceHub::~ResourceHub()
+{
+    // Ensure resources are released deterministically
+    Shutdown();
+}
+
 void ResourceHub::Init(ID2D1DeviceContext* dc,
     IDWriteFactory* dwrite,
     IWICImagingFactory* wic)
@@ -36,11 +42,19 @@ void ResourceHub::Shutdown()
     for (auto& h : m_memFonts)
         RemoveFontMemResourceEx(h);
 
+    // Release D2D/DWrite/WIC references first
     m_bitmaps.clear();
     m_fonts.clear();
     m_sounds.clear();
     m_pathCache.clear();
     m_soundCache.clear();
+
+    m_dc.Reset();
+    m_dwrite.Reset();
+    m_wic.Reset();
+
+    m_fileFonts.clear();
+    m_memFonts.clear();
 }
 
 static std::wstring to_wstring(const std::string& s)

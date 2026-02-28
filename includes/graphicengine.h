@@ -47,4 +47,7 @@ private:
 
     bool m_vSync = false;
 	std::unique_ptr<DrawContext> m_drawContext;
+
+    // Tracks whether CoInitializeEx succeeded so we only call CoUninitialize when needed
+    bool m_comInitialized = false;
 };

@@ -31,6 +31,7 @@ public:
 
 private:
     ResourceHub() = default;
+    ~ResourceHub();
 
     // ---- internal helpers ----
     ComPtr<ID2D1Bitmap> LoadBitmapFromFile(const std::string& path);

@@ -57,12 +57,21 @@ void GraphicEngine::RecreateDevice() {
 
 bool GraphicEngine::InitCom() {
     if (FAILED(CoInitializeEx(NULL, COINIT_APARTMENTTHREADED))) return false;
+    m_comInitialized = true;
 
     if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory),
-        reinterpret_cast<IUnknown**>(m_pDWriteFactory.ReleaseAndGetAddressOf())))) return false;
+        reinterpret_cast<IUnknown**>(m_pDWriteFactory.ReleaseAndGetAddressOf())))) {
+        CoUninitialize();
+        m_comInitialized = false;
+        return false;
+    }
 
     if (FAILED(CoCreateInstance(CLSID_WICImagingFactory, NULL, CLSCTX_INPROC_SERVER,
-        IID_PPV_ARGS(m_pWICFactory.ReleaseAndGetAddressOf())))) return false;
+        IID_PPV_ARGS(m_pWICFactory.ReleaseAndGetAddressOf())))) {
+        CoUninitialize();
+        m_comInitialized = false;
+        return false;
+    }
 
     return true;
 }
@@ -150,7 +159,17 @@ void GraphicEngine::Resize(int width, int height) {
 }
 
 void GraphicEngine::Release() {
+    // If a draw is in progress, end it first to avoid device state issues
+    if (m_isDrawing && m_pD2DDC) {
+        m_pD2DDC->EndDraw();
+        m_isDrawing = false;
+    }
+
+    // Release draw-related context first so it doesn't hold references to D2D/D3D objects
+    m_drawContext.reset();
+
     ResourceHub::Instance().Shutdown();
+
     if (m_pD2DDC) m_pD2DDC->SetTarget(nullptr);
     m_pDCompVisual.Reset();
     m_pDCompTarget.Reset();
@@ -161,7 +180,11 @@ void GraphicEngine::Release() {
     m_pWICFactory.Reset();
     m_pDWriteFactory.Reset();
     m_pD2DFactory.Reset();
-    CoUninitialize();
+
+    if (m_comInitialized) {
+        CoUninitialize();
+        m_comInitialized = false;
+    }
 }
 
 void GraphicEngine::BindToLua(sol::state& lua, const char* name) {
