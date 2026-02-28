@@ -1,4 +1,4 @@
-#pragma once
+ï»¿#pragma once
 #include <d2d1_1.h>
 #include <dwrite.h>
 #include <wincodec.h>
@@ -31,10 +31,10 @@ public:
     HRESULT STDMETHODCALLTYPE GetCurrentFontFile(IDWriteFontFile** fontFile) override;
 };
 
-// Loader ¼±¾ğ
+// Loader ì„ ì–¸
 class CustomFontCollectionLoader : public IDWriteFontCollectionLoader {
 public:
-    // Çì´õ¿¡´Â ¼±¾ğ¸¸ ÇÕ´Ï´Ù.
+    // í—¤ë”ì—ëŠ” ì„ ì–¸ë§Œ í•©ë‹ˆë‹¤.
     static CustomFontCollectionLoader* Instance;
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override;

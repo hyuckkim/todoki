@@ -1,11 +1,11 @@
-#include "ResourceHub.h"
+ï»¿#include "ResourceHub.h"
 #include <Windows.h>
 #include <dwrite_3.h>
 #include "util.h"
 
 CustomFontCollectionLoader* CustomFontCollectionLoader::Instance = new CustomFontCollectionLoader();
 
-// --- CustomFontFileEnumerator ±¸Çö ---
+// --- CustomFontFileEnumerator êµ¬í˜„ ---
 CustomFontFileEnumerator::CustomFontFileEnumerator(IDWriteFactory* factory, const std::wstring& path)
     : m_factory(factory), m_filePath(path), m_refCount(1), m_currentFile(nullptr), m_hasNext(true) {
 }
@@ -41,7 +41,7 @@ HRESULT STDMETHODCALLTYPE CustomFontFileEnumerator::GetCurrentFontFile(IDWriteFo
     *fontFile = m_currentFile; (*fontFile)->AddRef(); return S_OK;
 }
 
-// --- CustomFontCollectionLoader ±¸Çö ---
+// --- CustomFontCollectionLoader êµ¬í˜„ ---
 HRESULT STDMETHODCALLTYPE CustomFontCollectionLoader::QueryInterface(REFIID riid, void** ppv) {
     if (riid == __uuidof(IDWriteFontCollectionLoader) || riid == __uuidof(IUnknown)) {
         *ppv = this; return S_OK;
@@ -182,7 +182,7 @@ int ResourceHub::LoadSystemFont(const std::string& name,
 }
 int ResourceHub::LoadFontFile(const std::string& path, const std::string& family, float size)
 {
-    // 1. Ä³½Ã Ã¼Å© (¹«°Å¿î ·ÎÁ÷ ¹æÁö)
+    // 1. ìºì‹œ ì²´í¬ (ë¬´ê±°ìš´ ë¡œì§ ë°©ì§€)
     int weight = 400;
     std::string key = MakeFontKey(path, family, size, weight);
     if (m_fontCache.count(key)) return m_fontCache[key];
@@ -190,11 +190,11 @@ int ResourceHub::LoadFontFile(const std::string& path, const std::string& family
     std::wstring wPath = to_wstring(path);
     std::wstring wFamily = to_wstring(family);
 
-    // 2. ·Î´õ µî·Ï (ÀÌ¹Ì µî·ÏµÇ¾î ÀÖ¾îµµ ¾ÈÀüÇÔ)
+    // 2. ë¡œë” ë“±ë¡ (ì´ë¯¸ ë“±ë¡ë˜ì–´ ìˆì–´ë„ ì•ˆì „í•¨)
     m_dwrite->RegisterFontCollectionLoader(CustomFontCollectionLoader::Instance);
 
-    // 3. Ä¿½ºÅÒ ÄÃ·º¼Ç »ı¼º
-    // Å° °ªÀ¸·Î '°æ·Î ¹®ÀÚ¿­' ÀÚÃ¼¸¦ ³Ñ±é´Ï´Ù. (³Î Á¾·á ¹®ÀÚ Æ÷ÇÔ ÇÊ¼ö)
+    // 3. ì»¤ìŠ¤í…€ ì»¬ë ‰ì…˜ ìƒì„±
+    // í‚¤ ê°’ìœ¼ë¡œ 'ê²½ë¡œ ë¬¸ìì—´' ìì²´ë¥¼ ë„˜ê¹ë‹ˆë‹¤. (ë„ ì¢…ë£Œ ë¬¸ì í¬í•¨ í•„ìˆ˜)
     IDWriteFontCollection* pCollection = nullptr;
     HRESULT hr = m_dwrite->CreateCustomFontCollection(
         CustomFontCollectionLoader::Instance,
@@ -205,11 +205,11 @@ int ResourceHub::LoadFontFile(const std::string& path, const std::string& family
 
     if (FAILED(hr)) return -1;
 
-    // 4. ÅØ½ºÆ® Æ÷¸Ë »ı¼º
+    // 4. í…ìŠ¤íŠ¸ í¬ë§· ìƒì„±
     IDWriteTextFormat* fmt = nullptr;
     hr = m_dwrite->CreateTextFormat(
         wFamily.c_str(),
-        pCollection,  // »ı¼ºÇÑ Ä¿½ºÅÒ ÄÃ·º¼ÇÀ» ÁÖÀÔ!
+        pCollection,  // ìƒì„±í•œ ì»¤ìŠ¤í…€ ì»¬ë ‰ì…˜ì„ ì£¼ì…!
         (DWRITE_FONT_WEIGHT)weight,
         DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL,
@@ -218,12 +218,12 @@ int ResourceHub::LoadFontFile(const std::string& path, const std::string& family
         &fmt
     );
 
-    // ÄÃ·º¼ÇÀº Æ÷¸Ë ³»ºÎ¿¡¼­ AddRef µÇ¹Ç·Î ¿©±â¼­ Release ÇØµµ ¾ÈÀüÇÔ
+    // ì»¬ë ‰ì…˜ì€ í¬ë§· ë‚´ë¶€ì—ì„œ AddRef ë˜ë¯€ë¡œ ì—¬ê¸°ì„œ Release í•´ë„ ì•ˆì „í•¨
     if (pCollection) pCollection->Release();
 
     if (FAILED(hr)) return -1;
 
-    // 5. °á°ú ÀúÀå ¹× ¹İÈ¯
+    // 5. ê²°ê³¼ ì €ì¥ ë° ë°˜í™˜
     int id = (int)m_fonts.size();
     m_fonts.push_back(fmt);
     m_fontCache[key] = id;
