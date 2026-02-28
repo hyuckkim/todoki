@@ -3,7 +3,7 @@
 #include <dwrite.h>
 #include <wrl/client.h>
 #include <vector>
-#include <sol/sol.hpp>
+#include "includesol.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -16,36 +16,44 @@ struct StateLayer {
 
 class DrawContext {
 public:
-    DrawContext(ID2D1DeviceContext* context, ID2D1Factory1* factory);
+    DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory);
     ~DrawContext();
     void BindGlobal(sol::state& lua, const char* name);
 
     // 기본 그리기 함수
-    void rect(float x, float y, float w, float h, bool fill = true);
-    void circle(float x, float y, float radius, bool fill = true);
-    void polyline(const std::vector<D2D1_POINT_2F>& points, bool closed = false);
-    void polygon(const std::vector<D2D1_POINT_2F>& points);
-    void text(IDWriteTextFormat* fmt, const std::wstring& text, float x, float y);
-    void image(ID2D1Bitmap* bmp, float dx, float dy, float dw, float dh,
-        float sx = 0, float sy = 0, float sw = -1, float sh = -1, float alpha = 1.0f);
+    void rect(float x, float y, float w, float h, sol::optional<bool> fill);
+    void circle(float x, float y, float r, sol::optional<bool> fill);
+    void polyline(sol::table vertices, sol::optional<bool> closed);
+    void polygon(sol::table vertices);
+    void text(int fontId, std::string str, float x, float y);
+    void image(int id, float dx, float dy, sol::optional<float> dw, sol::optional<float> dh,
+        sol::optional<float> sx, sol::optional<float> sy,
+        sol::optional<float> sw, sol::optional<float> sh, sol::optional<float> alpha);
 
-    // 상태 관리
-    void push();
-    void pop();
-    void translate(float x, float y);
-    void scale(float sx, float sy, float ox = 0, float oy = 0);
-    void clip(float x, float y, float w, float h);
+    // Canvas 자체를 그리기
+    void draw(DrawContext* source, float x, float y, sol::optional<float> w, sol::optional<float> h,
+        sol::optional<float> sx, sol::optional<float> sy,
+        sol::optional<float> sw, sol::optional<float> sh, sol::optional<float> alpha);
 
-    // 속성
-    void setColor(float r, float g, float b, float a = 1.0f);
+    // --- 상태 및 속성 ---
+    void color(float r, float g, float b, sol::optional<float> a);
     void setStrokeWidth(float width);
     void setGlobalAlpha(float alpha);
 
-    // Offscreen canvas 생성
-    static std::shared_ptr<DrawContext> createOffscreen(ID2D1DeviceContext* parentDC, float w, float h);
+    void push();
+    void pop();
+    void translate(float x, float y);
+    void scale(float sx, float sy, sol::optional<float> ox, sol::optional<float> oy);
+    void clip(float x, float y, float w, float h);
+
+    // --- 시스템 ---
+    void batchBegin();
+    void batchEnd();
+    std::shared_ptr<DrawContext> createOffscreen(float w, float h);
+     
 
 private:
-    ComPtr<ID2D1DeviceContext> m_dc;
+    ComPtr<ID2D1RenderTarget> m_rt;
 	ComPtr<ID2D1Factory1> m_factory;
     ComPtr<ID2D1SolidColorBrush> m_brush;
 
@@ -56,4 +64,5 @@ private:
     std::vector<StateLayer> m_stateStack;
 
     void updateBrush();
+    bool isBatching = false;
 };
