@@ -251,14 +251,15 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         }
     }
 
-    switch (msg) {
-    case WM_INPUT: {
-        // Only forward WM_INPUT when alwaysReactive is enabled (or other logic requires it)
-        if (pThis && pThis->config.alwaysReactive) {
-            if (pThis->messageCallback) pThis->messageCallback(msg, wParam, lParam);
-        }
-        break;
-    }
+	switch (msg) {
+	case WM_INPUT: {
+		// Always forward WM_INPUT; alwaysReactive only controls RIDEV_INPUTSINK flag
+		// which determines whether input is received when window is not focused
+		if (pThis && pThis->messageCallback) {
+			pThis->messageCallback(msg, wParam, lParam);
+		}
+		break;
+	}
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;

@@ -101,6 +101,7 @@ void App::SetupCallbacks() {
                         m_lua.Call("OnMouseWheel", (int)wheelDelta, id, dx, dy);
                     }
                 }
+                break;
             }
 
         case WM_KEYDOWN:
