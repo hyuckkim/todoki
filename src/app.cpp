@@ -107,7 +107,7 @@ void App::SetupCallbacks() {
     // Provide hit test callback to window so we can control per-point click-through
     m_window.SetHitTestCallback([this](int x, int y) -> bool {
         auto res = m_lua.Call<bool>("CheckHit", (double)x, (double)y);
-        return res.value_or(false);
+        return res.value_or(true);
     });
 }
 
@@ -157,7 +157,7 @@ void App::UpdateMousePassthrough() {
     if (!ScreenToClient(hwnd, &clientPt)) return;
 
     auto res = m_lua.Call<bool>("CheckHit", (double)clientPt.x, (double)clientPt.y);
-    bool is_hit = res.value_or(false);
+    bool is_hit = res.value_or(true);
 
     static int last_hit_state = -1; // -1 = uninitialized, 0 = not clickable, 1 = clickable
 
