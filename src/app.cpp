@@ -9,14 +9,33 @@ App::~App() {
     m_engine.Release();
 }
 
-bool App::Init(HINSTANCE hInstance, int nCmdShow) {
+bool App::Init(HINSTANCE hInstance, int nCmdShow, const char* entryPath) {
+    // store entry path
+    if (entryPath && entryPath[0] != '\0') m_entryPath = entryPath;
+
+    // If an entry path was provided, change current directory to its folder so
+    // resources and relative loads resolve from the same directory as the entry.
+    if (!m_entryPath.empty()) {
+        char full[MAX_PATH];
+        if (GetFullPathNameA(m_entryPath.c_str(), MAX_PATH, full, nullptr) > 0) {
+            std::string sfull(full);
+            size_t pos = sfull.find_last_of("\\/");
+            if (pos != std::string::npos) {
+                std::string dir = sfull.substr(0, pos);
+                SetCurrentDirectoryA(dir.c_str());
+            }
+        }
+    }
+
     WindowConfig cfg = Window::LoadConfig(L"config.ini");
 
     if (!m_window.Create(hInstance, nCmdShow, cfg)) {
+        MessageBoxA(NULL, "Window creation failed. See console/log for details.", "Init Error", MB_OK | MB_ICONERROR);
         return false;
     }
 
     if (!m_engine.Init(m_window.GetHandle(), cfg)) {
+        MessageBoxA(NULL, "Graphic engine initialization failed.", "Init Error", MB_OK | MB_ICONERROR);
         return false;
     }
     m_sound.Init();
@@ -27,7 +46,8 @@ bool App::Init(HINSTANCE hInstance, int nCmdShow) {
     // 5. 루아 바인딩 및 초기화
     SetupBindings();
 
-    if (!m_lua.Init("main.lua", m_systems)) {
+    if (!m_lua.Init(m_entryPath.empty() ? "main.lua" : m_entryPath.c_str(), m_systems)) {
+        MessageBoxA(NULL, "Lua initialization failed. Check script path and errors.", "Init Error", MB_OK | MB_ICONERROR);
         return false;
     }
     m_lua.Call("Init");
@@ -118,7 +138,20 @@ void App::Reload() {
     // ResourceHub::Instance().Clear(); 
 
     // 루아 다시 로드
-    if (m_lua.Init("main.lua", m_systems)) {
+    // Ensure current directory is the entry's directory before reloading
+    if (!m_entryPath.empty()) {
+        char full[MAX_PATH];
+        if (GetFullPathNameA(m_entryPath.c_str(), MAX_PATH, full, nullptr) > 0) {
+            std::string sfull(full);
+            size_t pos = sfull.find_last_of("\\/");
+            if (pos != std::string::npos) {
+                std::string dir = sfull.substr(0, pos);
+                SetCurrentDirectoryA(dir.c_str());
+            }
+        }
+    }
+
+    if (m_lua.Init(m_entryPath.empty() ? "main.lua" : m_entryPath.c_str(), m_systems)) {
         m_lua.Call("Init");
         printf("[App] Reload Complete!\n");
     }

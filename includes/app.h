@@ -11,7 +11,7 @@ public:
     App();
     ~App();
 
-    bool Init(HINSTANCE hInstance, int nCmdShow);
+    bool Init(HINSTANCE hInstance, int nCmdShow, const char* entryPath);
     void Run();
 
 private:
@@ -22,6 +22,7 @@ private:
 
     bool m_needReload = false;
 	std::vector<LuaBinding> m_systems;
+    std::string m_entryPath;
 
     void SetupBindings();
     void SetupCallbacks();
