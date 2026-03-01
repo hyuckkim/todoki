@@ -19,6 +19,7 @@ bool App::Init(HINSTANCE hInstance, int nCmdShow) {
     if (!m_engine.Init(m_window.GetHandle(), cfg)) {
         return false;
     }
+    m_sound.Init();
 
     // 4. 입력 콜백 설정
     SetupCallbacks();
@@ -42,8 +43,7 @@ void App::SetupBindings() {
         BIND(ResourceHub::Instance(), BindLua, "res"),
 		BIND(m_window, BindToLuaInput, "is"),
 		BIND(m_window, BindToLuaSys, "sys"),
-        // 나중에 추가될 시스템들:
-        // BIND(m_sound, BindToLua, "s"),
+        BIND(m_sound, BindToLua, "snd")
     };
 
 #undef BIND

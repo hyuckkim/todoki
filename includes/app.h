@@ -3,6 +3,7 @@
 #include "graphicengine.h"
 #include "luacargo.h"
 #include "resourcehub.h"
+#include "soundsystem.h"
 #include <vector>
 
 class App {
@@ -17,6 +18,7 @@ private:
     Window m_window;
     GraphicEngine m_engine;
     LuaCargo m_lua;
+    SoundSystem m_sound;
 
     bool m_needReload = false;
 	std::vector<LuaBinding> m_systems;
