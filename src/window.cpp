@@ -110,6 +110,13 @@ void Window::BindToLuaInput(sol::state& lua, const char* name) {
     i["fpsMode"] = [this]() {
         return std::make_tuple(config.fps, config.vSync);
     };
+    i["focus"] = [this]() -> bool {
+        // 현재 윈도우 시스템에서 가장 앞에 나와 있는(포커스된) 창의 핸들을 가져옵니다.
+        HWND foregroundHwnd = GetForegroundWindow();
+
+        // 그 핸들이 현재 클래스가 가지고 있는 hwnd와 일치하는지 반환합니다.
+        return foregroundHwnd == hwnd;
+        };
 }
 
 void Window::BindToLuaSys(sol::state& lua, const char* name) {
