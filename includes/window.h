@@ -9,6 +9,10 @@ struct WindowConfig {
     int height = 600;
     bool fullscreen = false;
 	bool transparent = false;
+	// keep window always on top
+	bool alwaysTop = false;
+	// receive raw input even when the window is not focused
+	bool alwaysReactive = false;
 	std::wstring title = L"Window";
     bool vSync = false;
     int fps = 60;

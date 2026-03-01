@@ -29,6 +29,10 @@ static int IniHandler(
             cfg->vSync = (std::stoi(value) != 0);
         else if (std::string(name) == "FPS")
 			cfg->fps = std::stoi(value);
+        else if (std::string(name) == "AlwaysTop")
+            cfg->alwaysTop = (std::stoi(value) != 0);
+        else if (std::string(name) == "AlwaysReactive")
+            cfg->alwaysReactive = (std::stoi(value) != 0);
 	} return 1;
 }
 
@@ -238,12 +242,23 @@ LRESULT CALLBACK Window::WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPar
         default: break;
         }
 
-        if (pThis->messageCallback) {
-            pThis->messageCallback(msg, wParam, lParam);
+        // WM_INPUT should be dispatched conditionally because
+        // raw-input registration may be controlled by config.alwaysReactive.
+        if (msg != WM_INPUT) {
+            if (pThis->messageCallback) {
+                pThis->messageCallback(msg, wParam, lParam);
+            }
         }
     }
 
     switch (msg) {
+    case WM_INPUT: {
+        // Only forward WM_INPUT when alwaysReactive is enabled (or other logic requires it)
+        if (pThis && pThis->config.alwaysReactive) {
+            if (pThis->messageCallback) pThis->messageCallback(msg, wParam, lParam);
+        }
+        break;
+    }
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
@@ -302,12 +317,20 @@ bool Window::Create(HINSTANCE hInstance,
 
     rid.usUsagePage = 0x01;          // 일반 데스크톱 장치 그룹
     rid.usUsage = 0x02;              // 마우스
-    rid.dwFlags = RIDEV_INPUTSINK;   // 앱이 비활성화(포커스 상실) 상태일 때도 받으려면 이 플래그 사용
+    // If alwaysReactive is set, register as input sink so we receive raw input
+    // even when the window is not focused. Otherwise register normally.
+    rid.dwFlags = cfg.alwaysReactive ? RIDEV_INPUTSINK : 0;
     rid.hwndTarget = hwnd;           // 메시지를 받을 윈도우 핸들
 
     if (!RegisterRawInputDevices(&rid, 1, sizeof(rid))) {
         // 등록 실패 처리 (필요시)
         printf("Raw Input 등록 실패!");
+    }
+
+    // Apply topmost if requested
+    if (cfg.alwaysTop) {
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
     ShowWindow(hwnd, nCmdShow);
