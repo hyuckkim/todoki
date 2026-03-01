@@ -52,6 +52,37 @@ void App::SetupBindings() {
 void App::SetupCallbacks() {
     m_window.SetMessageCallback([this](UINT msg, WPARAM wParam, LPARAM lParam) {
         switch (msg) {
+            case WM_INPUT: {
+                UINT dwSize = sizeof(RAWINPUT);
+                static BYTE lpb[sizeof(RAWINPUT)];
+                GetRawInputData((HRAWINPUT)lParam, RID_INPUT, lpb, &dwSize, sizeof(RAWINPUTHEADER));
+                RAWINPUT* raw = (RAWINPUT*)lpb;
+
+                if (raw->header.dwType == RIM_TYPEMOUSE) {
+                    uintptr_t id = (uintptr_t)raw->header.hDevice;
+                    int dx = raw->data.mouse.lLastX;
+                    int dy = raw->data.mouse.lLastY;
+                    USHORT btn = raw->data.mouse.usButtonFlags;
+
+                    // 1. 이동 처리 (dx, dy가 0이 아닐 때만)
+                    if (dx != 0 || dy != 0) {
+                        m_lua.Call("OnMouseMove", id, dx, dy);
+                    }
+
+                    // 2. 버튼 처리 (Raw Input 플래그를 체크)
+                    if (btn & RI_MOUSE_LEFT_BUTTON_DOWN)   m_lua.Call("OnMouseDown", 0, id);
+                    if (btn & RI_MOUSE_LEFT_BUTTON_UP)     m_lua.Call("OnMouseUp", 0, id);
+                    if (btn & RI_MOUSE_RIGHT_BUTTON_DOWN)  m_lua.Call("OnMouseDown", 1, id);
+                    if (btn & RI_MOUSE_RIGHT_BUTTON_UP)    m_lua.Call("OnMouseUp", 1, id);
+
+                    // 3. 휠 처리
+                    if (btn & RI_MOUSE_WHEEL) {
+                        short wheelDelta = (short)raw->data.mouse.usButtonData;
+                        m_lua.Call("OnMouseWheel", (int)wheelDelta, id, dx, dy);
+                    }
+                }
+            }
+
         case WM_KEYDOWN:
             m_lua.Call("OnKeyDown", (int)wParam);
 #ifdef _DEBUG
@@ -60,12 +91,6 @@ void App::SetupCallbacks() {
             break;
 
         case WM_KEYUP: m_lua.Call("OnKeyUp", (int)wParam); break;
-        case WM_MOUSEMOVE: m_lua.Call("OnMouseMove", (int)LOWORD(lParam), (int)HIWORD(lParam)); break;
-        case WM_LBUTTONDOWN: m_lua.Call("OnMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam)); break;
-        case WM_LBUTTONUP: m_lua.Call("OnMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam)); break;
-        case WM_RBUTTONDOWN: m_lua.Call("OnRightMouseDown", (int)LOWORD(lParam), (int)HIWORD(lParam)); break;
-        case WM_RBUTTONUP: m_lua.Call("OnRightMouseUp", (int)LOWORD(lParam), (int)HIWORD(lParam)); break;
-        case WM_MOUSEWHEEL: m_lua.Call("OnMouseWheel", (int)GET_WHEEL_DELTA_WPARAM(wParam)); break;
 
         case WM_ACTIVATE:
             if (LOWORD(wParam) == WA_INACTIVE) m_lua.Call("OnInactive");

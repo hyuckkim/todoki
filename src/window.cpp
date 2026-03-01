@@ -142,7 +142,18 @@ void Window::BindToLuaSys(sol::state& lua, const char* name) {
         HCURSOR hCursor = LoadCursor(NULL, MAKEINTRESOURCE(type.value_or(32512)));
         SetCursor(hCursor);
     };
-
+    s["clip"] = [this](bool clip) {
+        if (clip && hwnd) {
+            RECT rect;
+            GetClientRect(hwnd, &rect);
+            ClientToScreen(hwnd, (LPPOINT)&rect.left);
+            ClientToScreen(hwnd, (LPPOINT)&rect.right);
+            ClipCursor(&rect);
+        }
+        else {
+            ClipCursor(NULL);
+        }
+        };
     // topmost
     s["topmost"] = [this](bool topmost) {
         if (hwnd) {
@@ -278,6 +289,18 @@ bool Window::Create(HINSTANCE hInstance,
     if (cfg.transparent) {
         // Set full opacity; actual per-pixel alpha can be applied with UpdateLayeredWindow later
         SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+    }
+
+    RAWINPUTDEVICE rid;
+
+    rid.usUsagePage = 0x01;          // 일반 데스크톱 장치 그룹
+    rid.usUsage = 0x02;              // 마우스
+    rid.dwFlags = RIDEV_INPUTSINK;   // 앱이 비활성화(포커스 상실) 상태일 때도 받으려면 이 플래그 사용
+    rid.hwndTarget = hwnd;           // 메시지를 받을 윈도우 핸들
+
+    if (!RegisterRawInputDevices(&rid, 1, sizeof(rid))) {
+        // 등록 실패 처리 (필요시)
+        printf("Raw Input 등록 실패!");
     }
 
     ShowWindow(hwnd, nCmdShow);
