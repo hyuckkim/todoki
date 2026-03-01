@@ -150,9 +150,6 @@ void App::UpdateMousePassthrough() {
         else {
             SetWindowLongPtr(hwnd, GWL_EXSTYLE, exStyle | WS_EX_TRANSPARENT);
         }
-        // apply style change
-        SetWindowPos(hwnd, nullptr, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
         last_hit_state = is_hit ? 1 : 0;
     }
 }
