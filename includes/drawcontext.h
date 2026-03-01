@@ -36,7 +36,7 @@ public:
         sol::optional<float> sw, sol::optional<float> sh, sol::optional<float> alpha);
 
     // --- 상태 및 속성 ---
-    void color(float r, float g, float b, sol::optional<float> a);
+    void color(sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4);
     void setStrokeWidth(float width);
     void setGlobalAlpha(float alpha);
 

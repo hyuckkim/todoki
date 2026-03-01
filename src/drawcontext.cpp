@@ -154,8 +154,85 @@ void DrawContext::updateBrush() {
     else m_brush->SetColor(m_color);
     m_brush->SetOpacity(m_globalAlpha);
 }
-void DrawContext::color(float r, float g, float b, sol::optional<float> a) {
-    m_color = D2D1::ColorF(r, g, b, a.value_or(1.0f));
+void DrawContext::color(sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4) {
+    auto smartColor = [](sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4) {
+        // 1. 문자열 처리 (예: "#FF0000FF")
+        if (arg1.is<std::string>()) {
+            std::string s = arg1.as<std::string>();
+
+            // '#' 제거
+            if (!s.empty() && s[0] == '#') s = s.substr(1);
+
+            // 6자리 또는 8자리인지 확인
+            if (s.length() == 6 || s.length() == 8) {
+                uint32_t hex = std::stoul(s, nullptr, 16);
+                float r, g, b, a;
+
+                if (s.length() == 8) {
+                    // RRGGBBAA
+                    r = ((hex >> 24) & 0xFF) / 255.f;
+                    g = ((hex >> 16) & 0xFF) / 255.f;
+                    b = ((hex >> 8) & 0xFF) / 255.f;
+                    a = (hex & 0xFF) / 255.f;
+                }
+                else {
+                    // RRGGBB + optional alpha
+                    r = ((hex >> 16) & 0xFF) / 255.f;
+                    g = ((hex >> 8) & 0xFF) / 255.f;
+                    b = (hex & 0xFF) / 255.f;
+                    a = arg2.value_or(1.f);
+                    if (a > 1.f) a /= 255.f;
+                }
+                return D2D1::ColorF(r, g, b, a);
+            }
+
+            // 문자열 형식이 이상하면 Black 반환
+            return D2D1::ColorF(D2D1::ColorF::Black);
+        }
+
+        // 2. 숫자 처리
+        if (arg1.is<float>()) {
+            float r = arg1.as<float>();
+
+            // 인자가 3개 이상 들어온 경우 (r, g, b, [a])
+            if (arg2.has_value() && arg3.has_value()) {
+                float g = arg2.value();
+                float b = arg3.value();
+
+                bool isIntRange = (r > 1.0f || g > 1.0f || b > 1.0f);
+                float rf = isIntRange ? r / 255.0f : r;
+                float gf = isIntRange ? g / 255.0f : g;
+                float bf = isIntRange ? b / 255.0f : b;
+
+                float av = arg4.value_or(isIntRange ? 255.0f : 1.0f);
+                float af = (av > 1.0f) ? av / 255.0f : av;
+
+                return D2D1::ColorF(rf, gf, bf, af);
+            }
+
+            // 인자가 1개 또는 2개인 경우 (Hex 처리)
+            // 0xRRGGBBAA 또는 0xRRGGBB 형태 판별
+            uint32_t hex = static_cast<uint32_t>(r);
+            float finalA = 1.0f;
+
+            if (hex > 0xFFFFFF) {
+                // 8자리 Hex (RRGGBBAA)로 간주
+                float rv = ((hex >> 24) & 0xFF) / 255.0f;
+                float gv = ((hex >> 16) & 0xFF) / 255.0f;
+                float bv = ((hex >> 8) & 0xFF) / 255.0f;
+                float av = (hex & 0xFF) / 255.0f;
+                return D2D1::ColorF(rv, gv, bv, av);
+            }
+            else {
+                // 6자리 Hex (RRGGBB)로 간주 + 별도 Alpha 인자 확인
+                float av = arg2.value_or(1.0f);
+                finalA = (av > 1.0f) ? av / 255.0f : av;
+                return D2D1::ColorF(hex, finalA);
+            }
+        }
+        return D2D1::ColorF(D2D1::ColorF::Black);
+        };
+    m_color = smartColor(arg1, arg2, arg3, arg4);
     updateBrush();
 }
 void DrawContext::setStrokeWidth(float width) { m_strokeWidth = width; }
@@ -257,7 +334,10 @@ void DrawContext::BindGlobal(sol::state& lua, const char* name) {
         };
 
     // --- 상태 관리 및 속성 ---
-    g["color"] = [this](float r, float g, float b, sol::optional<float> a) { color(r, g, b, a); };
+
+    g["color"] = [this](sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4) {
+		color(arg1, arg2, arg3, arg4);
+        };
     g["lineWidth"] = [this](float w) { setStrokeWidth(w); };
     g["push"] = [this]() { push(); };
     g["pop"] = [this]() { pop(); };
