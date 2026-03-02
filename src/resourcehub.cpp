@@ -293,14 +293,14 @@ int ResourceHub::LoadFontFile(const std::string& path, const std::string& family
     // 3. 커스텀 컬렉션 생성
     IDWriteFontCollection* pCollection = nullptr;
 
-    // 절대경로로 변환
-    char fullPath[MAX_PATH];
-    if (!GetFullPathNameA(path.c_str(), MAX_PATH, fullPath, nullptr)) {
+    // 절대경로로 변환 (Unicode-safe)
+    wchar_t fullPathW[MAX_PATH];
+    if (!GetFullPathNameW(wPath.c_str(), MAX_PATH, fullPathW, nullptr)) {
         printf("[RES] fontFile fail: %s\n", path.c_str());
         return -1;
     }
 
-    std::wstring wFullPath = to_wstring(fullPath);
+    std::wstring wFullPath(fullPathW);
 
     HRESULT hr = m_dwrite->CreateCustomFontCollection(
         CustomFontCollectionLoader::Instance,
