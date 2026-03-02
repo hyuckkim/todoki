@@ -71,3 +71,8 @@ target_include_directories(world PRIVATE external/lua/include)
 add_subdirectory(external/sol2)
 target_link_libraries(world PRIVATE sol2)
 target_include_directories(world PRIVATE external/sol2/include)
+
+# nlohmann/json
+target_include_directories(world PRIVATE
+    external/json/single_include
+)

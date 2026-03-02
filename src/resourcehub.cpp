@@ -2,6 +2,70 @@
 #include <Windows.h>
 #include <dwrite_3.h>
 #include "util.h"
+#include <fstream>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
+
+// JSON ↔ Lua 변환 헬퍼 함수
+static sol::object convert_json_to_table(const json& j, sol::state_view lua) {
+    if (j.is_null()) return sol::nil;
+    if (j.is_boolean()) return sol::make_object(lua, j.get<bool>());
+    if (j.is_number()) return sol::make_object(lua, j.get<double>());
+    if (j.is_string()) return sol::make_object(lua, j.get<std::string>());
+
+    if (j.is_array()) {
+        sol::table t = lua.create_table();
+        for (size_t i = 0; i < j.size(); ++i) {
+            t[i + 1] = convert_json_to_table(j[i], lua);
+        }
+        return t;
+    }
+    if (j.is_object()) {
+        sol::table t = lua.create_table();
+        for (auto& el : j.items()) {
+            t[el.key()] = convert_json_to_table(el.value(), lua);
+        }
+        return t;
+    }
+    return sol::nil;
+}
+
+static json convert_table_to_json(sol::object obj) {
+    if (obj.is<sol::nil_t>()) return nullptr;
+    if (obj.is<bool>()) return obj.as<bool>();
+    if (obj.is<double>()) return obj.as<double>();
+    if (obj.is<std::string>()) return obj.as<std::string>();
+
+    if (obj.is<sol::table>()) {
+        sol::table t = obj.as<sol::table>();
+
+        // 배열 여부 판별
+        bool is_array = false;
+        t.for_each([&is_array](sol::object key, sol::object value) {
+            if (key.is<int>() && key.as<int>() == 1) is_array = true;
+            return false;
+        });
+
+        if (is_array) {
+            json j = json::array();
+            for (size_t i = 1; i <= t.size(); ++i) {
+                j.push_back(convert_table_to_json(t[i]));
+            }
+            return j;
+        }
+        else {
+            json j = json::object();
+            t.for_each([&j](sol::object key, sol::object value) {
+                if (key.is<std::string>()) {
+                    j[key.as<std::string>()] = convert_table_to_json(value);
+                }
+            });
+            return j;
+        }
+    }
+    return nullptr;
+}
 
 CustomFontCollectionLoader* CustomFontCollectionLoader::Instance = new CustomFontCollectionLoader();
 
@@ -30,7 +94,10 @@ ULONG STDMETHODCALLTYPE CustomFontFileEnumerator::Release() {
 HRESULT STDMETHODCALLTYPE CustomFontFileEnumerator::MoveNext(BOOL* hasNext) {
     *hasNext = m_hasNext;
     if (m_hasNext) {
-        m_factory->CreateFontFileReference(m_filePath.c_str(), nullptr, &m_currentFile);
+        HRESULT hr = m_factory->CreateFontFileReference(m_filePath.c_str(), nullptr, &m_currentFile);
+        if (FAILED(hr)) {
+            *hasNext = FALSE;
+        }
         m_hasNext = false;
     }
     return S_OK;
@@ -115,11 +182,35 @@ void ResourceHub::Shutdown()
 
 static std::wstring to_wstring(const std::string& s)
 {
+    if (s.empty()) return L"";
+
+    // Prefer UTF-8
     int size = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, nullptr, 0);
+    UINT codePage = CP_UTF8;
+
+    // Fallback for non-UTF8 source strings (e.g. local ACP-encoded script)
+    if (size <= 0) {
+        size = MultiByteToWideChar(CP_ACP, 0, s.c_str(), -1, nullptr, 0);
+        codePage = CP_ACP;
+    }
+
+    if (size <= 0) return L"";
+
     std::wstring w(size, 0);
-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), -1, &w[0], size);
-    w.pop_back();
+    MultiByteToWideChar(codePage, 0, s.c_str(), -1, &w[0], size);
+    if (!w.empty() && w.back() == L'\0') w.pop_back();
     return w;
+}
+
+static std::string to_utf8(const std::wstring& w)
+{
+    if (w.empty()) return "";
+    int size = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (size <= 0) return "";
+    std::string s(size, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), -1, &s[0], size, nullptr, nullptr);
+    if (!s.empty() && s.back() == '\0') s.pop_back();
+    return s;
 }
 
 ComPtr<ID2D1Bitmap>
@@ -134,8 +225,10 @@ ResourceHub::LoadBitmapFromFile(const std::string& path)
 
     if (FAILED(m_wic->CreateDecoderFromFilename(
         wPath.c_str(), nullptr, GENERIC_READ,
-        WICDecodeMetadataCacheOnLoad, &decoder)))
+        WICDecodeMetadataCacheOnLoad, &decoder))) {
+        printf("[RES] image fail: %s\n", path.c_str());
         return nullptr;
+    }
 
     decoder->GetFrame(0, &frame);
     m_wic->CreateFormatConverter(&conv);
@@ -147,6 +240,7 @@ ResourceHub::LoadBitmapFromFile(const std::string& path)
         WICBitmapPaletteTypeMedianCut);
 
     m_dc->CreateBitmapFromWicBitmap(conv.Get(), nullptr, &bmp);
+    printf("[RES] image: %s\n", path.c_str());
     return bmp;
 }
 int ResourceHub::LoadSystemFont(const std::string& name,
@@ -171,12 +265,15 @@ int ResourceHub::LoadSystemFont(const std::string& name,
         DWRITE_FONT_STRETCH_NORMAL,
         size,
         L"ko-kr",
-        &fmt)))
+        &fmt))) {
+        printf("[RES] system font fail: %s\n", name.c_str());
         return -1;
+    }
 
     int id = (int)m_fonts.size();
     m_fonts.push_back(fmt);
     m_fontCache[key] = id;
+    printf("[RES] system font: %s\n", name.c_str());
 
     return id;
 }
@@ -194,22 +291,79 @@ int ResourceHub::LoadFontFile(const std::string& path, const std::string& family
     m_dwrite->RegisterFontCollectionLoader(CustomFontCollectionLoader::Instance);
 
     // 3. 커스텀 컬렉션 생성
-    // 키 값으로 '경로 문자열' 자체를 넘깁니다. (널 종료 문자 포함 필수)
     IDWriteFontCollection* pCollection = nullptr;
+
+    // 절대경로로 변환
+    char fullPath[MAX_PATH];
+    if (!GetFullPathNameA(path.c_str(), MAX_PATH, fullPath, nullptr)) {
+        printf("[RES] fontFile fail: %s\n", path.c_str());
+        return -1;
+    }
+
+    std::wstring wFullPath = to_wstring(fullPath);
+
     HRESULT hr = m_dwrite->CreateCustomFontCollection(
         CustomFontCollectionLoader::Instance,
-        wPath.c_str(),
-        (uint32_t)((wPath.length() + 1) * sizeof(wchar_t)),
+        wFullPath.c_str(),
+        (uint32_t)((wFullPath.length() + 1) * sizeof(wchar_t)),
         &pCollection
     );
 
-    if (FAILED(hr)) return -1;
+    if (FAILED(hr)) {
+        printf("[RES] fontFile fail: %s\n", path.c_str());
+        return -1;
+    }
 
-    // 4. 텍스트 포맷 생성
+    // 4. 요청 family가 컬렉션에 없으면 첫 번째 family를 강제로 사용
+    std::wstring resolvedFamily = wFamily;
+    bool usedFirstFamilyFallback = false;
+    UINT32 familyIndex = 0;
+    BOOL familyExists = FALSE;
+    hr = pCollection->FindFamilyName(wFamily.c_str(), &familyIndex, &familyExists);
+
+    if (FAILED(hr) || !familyExists) {
+        UINT32 familyCount = pCollection->GetFontFamilyCount();
+        if (familyCount > 0) {
+            IDWriteFontFamily* pFamily = nullptr;
+            if (SUCCEEDED(pCollection->GetFontFamily(0, &pFamily)) && pFamily) {
+                IDWriteLocalizedStrings* pNames = nullptr;
+                if (SUCCEEDED(pFamily->GetFamilyNames(&pNames)) && pNames) {
+                    UINT32 nameIndex = 0;
+                    BOOL exists = FALSE;
+                    pNames->FindLocaleName(L"ko-kr", &nameIndex, &exists);
+                    if (!exists) pNames->FindLocaleName(L"en-us", &nameIndex, &exists);
+                    if (!exists) nameIndex = 0;
+
+                    UINT32 nameLen = 0;
+                    if (SUCCEEDED(pNames->GetStringLength(nameIndex, &nameLen))) {
+                        std::wstring name(nameLen + 1, L'\0');
+                        if (SUCCEEDED(pNames->GetString(nameIndex, &name[0], nameLen + 1))) {
+                            name.resize(nameLen);
+                            resolvedFamily = name;
+                            usedFirstFamilyFallback = true;
+                        }
+                    }
+                    pNames->Release();
+                }
+                pFamily->Release();
+            }
+        }
+    }
+
+    if (usedFirstFamilyFallback) {
+        if (resolvedFamily.empty()) {
+            resolvedFamily = wFamily;
+        }
+        std::string familyUtf8 = to_utf8(resolvedFamily);
+        if (familyUtf8.empty()) familyUtf8 = "<empty>";
+        printf("[RES] fontFile fallback family: %s\n", familyUtf8.c_str());
+    }
+
+    // 5. 텍스트 포맷 생성
     IDWriteTextFormat* fmt = nullptr;
     hr = m_dwrite->CreateTextFormat(
-        wFamily.c_str(),
-        pCollection,  // 생성한 커스텀 컬렉션을 주입!
+        resolvedFamily.c_str(),
+        pCollection,
         (DWRITE_FONT_WEIGHT)weight,
         DWRITE_FONT_STYLE_NORMAL,
         DWRITE_FONT_STRETCH_NORMAL,
@@ -218,15 +372,19 @@ int ResourceHub::LoadFontFile(const std::string& path, const std::string& family
         &fmt
     );
 
-    // 컬렉션은 포맷 내부에서 AddRef 되므로 여기서 Release 해도 안전함
     if (pCollection) pCollection->Release();
 
-    if (FAILED(hr)) return -1;
+    if (FAILED(hr)) {
+        printf("[RES] fontFile fail: %s\n", path.c_str());
+        return -1;
+    }
 
-    // 5. 결과 저장 및 반환
+    // 6. 결과 저장 및 반환
     int id = (int)m_fonts.size();
     m_fonts.push_back(fmt);
     m_fontCache[key] = id;
+
+    printf("[RES] fontFile: %s\n", path.c_str());
 
     return id;
 }
@@ -236,16 +394,21 @@ int ResourceHub::LoadSound(const std::string& path)
     if (it != m_soundCache.end())
         return it->second;
 
-    if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES)
+    if (GetFileAttributesA(path.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        printf("[RES] sound fail: %s\n", path.c_str());
         return -1;
+    }
 
     auto wav = std::make_shared<SoLoud::Wav>();
-    if (wav->load(path.c_str()) != SoLoud::SO_NO_ERROR)
+    if (wav->load(path.c_str()) != SoLoud::SO_NO_ERROR) {
+        printf("[RES] sound fail: %s\n", path.c_str());
         return -1;
+    }
 
     int id = (int)m_sounds.size();
     m_sounds.push_back(wav);
     m_soundCache[path] = id;
+    printf("[RES] sound: %s\n", path.c_str());
     return id;
 }
 void ResourceHub::BindLua(sol::state& lua, const char* name)
@@ -286,6 +449,44 @@ void ResourceHub::BindLua(sol::state& lua, const char* name)
         {
             return LoadSound(path);
         };
+
+    // JSON 입출력
+    res["loadjson"] = [](std::string path, sol::this_state s) -> sol::object {
+        std::ifstream file(path);
+        if (!file.is_open()) {
+            printf("[RES] json fail: %s\n", path.c_str());
+            return sol::nil;
+        }
+        try {
+            json j;
+            file >> j;
+            sol::state_view lua(s);
+            printf("[RES] json: %s\n", path.c_str());
+            return convert_json_to_table(j, lua);
+        }
+        catch (...) {
+            printf("[RES] json fail: %s\n", path.c_str());
+            return sol::nil;
+        }
+    };
+
+    res["savejson"] = [](std::string path, sol::object table) -> bool {
+        std::ofstream file(path);
+        if (!file.is_open()) {
+            printf("[RES] json save fail: %s\n", path.c_str());
+            return false;
+        }
+        try {
+            json j = convert_table_to_json(table);
+            file << j.dump(4);
+            printf("[RES] json save: %s\n", path.c_str());
+            return true;
+        }
+        catch (...) {
+            printf("[RES] json save fail: %s\n", path.c_str());
+            return false;
+        }
+    };
 }
 ID2D1Bitmap* ResourceHub::GetBitmap(int id)
 {

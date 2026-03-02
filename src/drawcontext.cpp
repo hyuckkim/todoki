@@ -70,6 +70,7 @@ void DrawContext::text(int fontId, std::string str, float x, float y) {
 
     IDWriteTextFormat* pFormat = ResourceHub::Instance().GetFont(fontId);
     if (!pFormat) return;
+
     std::wstring wstr = ToWString(str);
     D2D1_RECT_F layoutRect = D2D1::RectF(
         x, y,
