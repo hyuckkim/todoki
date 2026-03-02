@@ -2,22 +2,120 @@
 #include <windows.h>
 #include <string>
 #include <functional>
+#include <map>
 #include "includesol.h"
 
 struct WindowConfig {
-    int width = 800;
-    int height = 600;
-    bool fullscreen = false;
-	bool transparent = false;
-	// keep window always on top
-	bool alwaysTop = false;
-	// receive raw input even when the window is not focused
-	bool alwaysReactive = false;
-	std::wstring title = L"Window";
-    bool vSync = false;
-    int fps = 60;
-    int posX = 200;
-    int posY = 200;
+    // Section -> Key -> Value mapping (all stored as strings)
+    std::map<std::string, std::map<std::string, std::string>> data;
+    
+    WindowConfig() {
+        // Set default values in Window section (all lowercase keys)
+        data["Window"]["width"] = "800";
+        data["Window"]["height"] = "600";
+        data["Window"]["transparent"] = "0";
+        data["Window"]["title"] = "Window";
+        data["Window"]["vSync"] = "0";
+        data["Window"]["fps"] = "60";
+        data["Window"]["alwaysTop"] = "0";
+        data["Window"]["alwaysReactive"] = "0";
+        data["Window"]["posX"] = "200";
+        data["Window"]["posY"] = "200";
+    }
+    
+    // Helper methods for backward compatibility with existing code
+    int getWidth() const { 
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("width");
+            if (v != it->second.end()) return std::stoi(v->second);
+        }
+        return 800;
+    }
+    
+    int getHeight() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("height");
+            if (v != it->second.end()) return std::stoi(v->second);
+        }
+        return 600;
+    }
+    
+    bool getTransparent() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("transparent");
+            if (v != it->second.end()) return std::stoi(v->second) != 0;
+        }
+        return false;
+    }
+    
+    bool getAlwaysTop() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("alwaysTop");
+            if (v != it->second.end()) return std::stoi(v->second) != 0;
+        }
+        return false;
+    }
+    
+    bool getAlwaysReactive() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("alwaysReactive");
+            if (v != it->second.end()) return std::stoi(v->second) != 0;
+        }
+        return false;
+    }
+    
+    std::wstring getTitle() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("title");
+            if (v != it->second.end()) {
+                std::string s = v->second;
+                return std::wstring(s.begin(), s.end());
+            }
+        }
+        return L"Window";
+    }
+    
+    bool getVSync() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("vSync");
+            if (v != it->second.end()) return std::stoi(v->second) != 0;
+        }
+        return false;
+    }
+    
+    int getFPS() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("fps");
+            if (v != it->second.end()) return std::stoi(v->second);
+        }
+        return 60;
+    }
+    
+    int getPosX() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("posX");
+            if (v != it->second.end()) return std::stoi(v->second);
+        }
+        return 200;
+    }
+    
+    int getPosY() const {
+        auto it = data.find("Window");
+        if (it != data.end()) {
+            auto v = it->second.find("posY");
+            if (v != it->second.end()) return std::stoi(v->second);
+        }
+        return 200;
+    }
 };
 
 class Window {

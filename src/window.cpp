@@ -5,6 +5,7 @@
 #include <ini.h>
 #include <string>
 #include <functional>
+#include <algorithm>
 #include "includesol.h"
 #include <tuple>
 
@@ -14,26 +15,11 @@ static int IniHandler(
 	const char* name,
 	const char* value) {
 	auto* cfg = reinterpret_cast<WindowConfig*>(user);
-	if (std::string(section) == "Window") {
-		if (std::string(name) == "Width")
-			cfg->width = std::stoi(value);
-		else if (std::string(name) == "Height")
-			cfg->height = std::stoi(value);
-		else if (std::string(name) == "Fullscreen")
-			cfg->fullscreen = (std::stoi(value) != 0);
-		else if (std::string(name) == "Transparent")
-			cfg->transparent = (std::stoi(value) != 0);
-		else if (std::string(name) == "Title")
-			cfg->title = std::wstring(value, value + strlen(value));
-		else if (std::string(name) == "VSync")
-            cfg->vSync = (std::stoi(value) != 0);
-        else if (std::string(name) == "FPS")
-			cfg->fps = std::stoi(value);
-        else if (std::string(name) == "AlwaysTop")
-            cfg->alwaysTop = (std::stoi(value) != 0);
-        else if (std::string(name) == "AlwaysReactive")
-            cfg->alwaysReactive = (std::stoi(value) != 0);
-	} return 1;
+	// Normalize keys to lowercase for consistency
+	std::string keyName(name);
+	std::transform(keyName.begin(), keyName.end(), keyName.begin(), ::tolower);
+	cfg->data[section][keyName] = value;
+	return 1;
 }
 
 void Window::BindToLuaInput(sol::state& lua, const char* name) {
@@ -112,13 +98,28 @@ void Window::BindToLuaInput(sol::state& lua, const char* name) {
 
     // fps/vsync info from window config (read-only)
     i["fpsMode"] = [this]() {
-        return std::make_tuple(config.fps, config.vSync);
+        return std::make_tuple(config.getFPS(), config.getVSync());
+    };
+    i["config"] = [this](sol::this_state ts) {
+        sol::state_view lua(ts);
+        sol::table root = lua.create_table();
+        
+        // Convert entire data map to nested Lua tables
+        for (const auto& section : config.data) {
+            sol::table sectionTable = lua.create_table();
+            for (const auto& kv : section.second) {
+                sectionTable[kv.first] = kv.second;
+            }
+            root[section.first] = sectionTable;
+        }
+        
+        return root;
     };
     i["focus"] = [this]() -> bool {
         // 현재 윈도우 시스템에서 가장 앞에 나와 있는(포커스된) 창의 핸들을 가져옵니다.
         HWND foregroundHwnd = GetForegroundWindow();
 
-        // 그 핸들이 현재 클래스가 가지고 있는 hwnd와 일치하는지 반환합니다.
+        // 그 핸들이 현재 클래스가 받고 있는 hwnd와 일치하는지 반환합니다.
         return foregroundHwnd == hwnd;
         };
 }
@@ -130,8 +131,8 @@ void Window::BindToLuaSys(sol::state& lua, const char* name) {
     s["size"] = [this](int w, int h) {
         if (hwnd) {
             SetWindowPos(hwnd, NULL, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
-            config.width = w;
-            config.height = h;
+            config.data["Window"]["width"] = std::to_string(w);
+            config.data["Window"]["height"] = std::to_string(h);
             if (sizeCallback) sizeCallback(w, h);
         }
     };
@@ -145,7 +146,13 @@ void Window::BindToLuaSys(sol::state& lua, const char* name) {
 
     // cursor show/hide
     s["showCursor"] = [](bool show) {
-        ShowCursor(show);
+        // ShowCursor uses a display counter, not a simple on/off state
+        // Call it repeatedly until the cursor reaches the desired visibility
+        if (show) {
+            while (ShowCursor(TRUE) < 0);  // counter >= 0 means visible
+        } else {
+            while (ShowCursor(FALSE) >= 0); // counter < 0 means hidden
+        }
     };
 
     // set cursor by resource id/name
@@ -281,7 +288,7 @@ bool Window::Create(HINSTANCE hInstance,
     DWORD style = 0;
     DWORD exStyle = 0;
 
-    if (cfg.transparent)
+    if (cfg.getTransparent())
     {
         // Use layered window for per-pixel alpha and reliable click-through handling
         style = WS_POPUP;
@@ -289,18 +296,20 @@ bool Window::Create(HINSTANCE hInstance,
     }
     else
     {
-        style = WS_OVERLAPPEDWINDOW;
+        // Remove maximize button from title bar
+        style = WS_OVERLAPPEDWINDOW & ~WS_MAXIMIZEBOX;
         exStyle = 0;
     }
 
     hwnd = CreateWindowEx(
         exStyle,
         wc.lpszClassName,
-        cfg.title.c_str(),
+        cfg.getTitle().c_str(),
         style,
-        cfg.posX, cfg.posY,
-        cfg.width,
-        cfg.height,
+        cfg.getPosX(), 
+        cfg.getPosY(),
+        cfg.getWidth(),
+        cfg.getHeight(),
         nullptr, nullptr,
         hInstance,
         this);
@@ -309,7 +318,7 @@ bool Window::Create(HINSTANCE hInstance,
         return false;
 
     // For layered windows, ensure layered attributes are set (opaque by default)
-    if (cfg.transparent) {
+    if (cfg.getTransparent()) {
         // Set full opacity; actual per-pixel alpha can be applied with UpdateLayeredWindow later
         SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
     }
@@ -320,7 +329,7 @@ bool Window::Create(HINSTANCE hInstance,
     rid.usUsage = 0x02;              // 마우스
     // If alwaysReactive is set, register as input sink so we receive raw input
     // even when the window is not focused. Otherwise register normally.
-    rid.dwFlags = cfg.alwaysReactive ? RIDEV_INPUTSINK : 0;
+    rid.dwFlags = cfg.getAlwaysReactive() ? RIDEV_INPUTSINK : 0;
     rid.hwndTarget = hwnd;           // 메시지를 받을 윈도우 핸들
 
     if (!RegisterRawInputDevices(&rid, 1, sizeof(rid))) {
@@ -329,7 +338,7 @@ bool Window::Create(HINSTANCE hInstance,
     }
 
     // Apply topmost if requested
-    if (cfg.alwaysTop) {
+    if (cfg.getAlwaysTop()) {
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
@@ -364,8 +373,8 @@ void Window::RunGameLoop(std::function<void(double dtMs)> tick) {
                 tick(dtMs);
             }
 
-            if (!config.vSync) {
-                double targetMs = 1000.0 / config.fps;
+            if (!config.getVSync()) {
+                double targetMs = 1000.0 / config.getFPS();
                 LARGE_INTEGER frameEnd;
                 QueryPerformanceCounter(&frameEnd);
                 double elapsedMs = (double)(frameEnd.QuadPart - currentTime.QuadPart) * 1000.0 / freq.QuadPart;

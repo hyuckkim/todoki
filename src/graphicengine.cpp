@@ -12,10 +12,10 @@
 
 bool GraphicEngine::Init(HWND hwnd, WindowConfig cfg) {
     m_hwnd = hwnd;
-    m_width = cfg.width;
-    m_height = cfg.height;
-	m_vSync = cfg.vSync;
-    m_useComposition = cfg.transparent;
+    m_width = cfg.getWidth();
+    m_height = cfg.getHeight();
+	m_vSync = cfg.getVSync();
+    m_useComposition = cfg.getTransparent();
 
     if (!InitCom()) return false;
     if (!InitD2D()) return false;

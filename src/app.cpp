@@ -166,7 +166,7 @@ void App::Run() {
             Reload();
         }
         // Update mouse passthrough state before drawing (only if transparency enabled)
-        if (m_window.GetConfig().transparent) {
+        if (m_window.GetConfig().getTransparent()) {
             UpdateMousePassthrough();
         }
 
