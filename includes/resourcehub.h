@@ -4,6 +4,7 @@
 #include <wincodec.h>
 #include <wrl/client.h>
 #include <sol/sol.hpp>
+#include "luabind.h"
 #include <soloud_wav.h>
 
 #include <vector>
@@ -56,7 +57,7 @@ public:
 
     void Shutdown();
 
-    void BindLua(sol::state& lua, const char* name);
+    void BindLua(LuaBindContext& ctx);
 
     ID2D1Bitmap* GetBitmap(int id);
     IDWriteTextFormat* GetFont(int id);

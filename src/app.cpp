@@ -56,7 +56,7 @@ bool App::Init(HINSTANCE hInstance, int nCmdShow, const char* entryPath) {
 
 void App::SetupBindings() {
 #define BIND(obj, func, name) \
-        LuaBinding([&](sol::state& s, const char* n) { (obj).func(s, n); }, name)
+        LuaBinding([&](LuaBindContext& ctx) { (obj).func(ctx); }, name)
 
     m_systems = {
         BIND(m_engine, BindToLua, "g"),

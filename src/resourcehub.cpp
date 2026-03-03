@@ -411,11 +411,11 @@ int ResourceHub::LoadSound(const std::string& path)
     printf("[RES] sound: %s\n", path.c_str());
     return id;
 }
-void ResourceHub::BindLua(sol::state& lua, const char* name)
+void ResourceHub::BindLua(LuaBindContext& ctx)
 {
-    auto res = lua.create_named_table(name);
+    LuaNamespaceBinder binder(ctx);
 
-    res["image"] = [this](std::string path)
+    binder.func("image", [this](std::string path)
         {
             auto it = m_pathCache.find(path);
             if (it != m_pathCache.end())
@@ -428,30 +428,30 @@ void ResourceHub::BindLua(sol::state& lua, const char* name)
             m_bitmaps.push_back(bmp);
             m_pathCache[path] = id;
             return id;
-        };
+        }).names({"path"});
 
-    res["font"] = [this](std::string name,
+    binder.func("font", [this](std::string name,
         float size,
-        sol::optional<int> weight)
+        std::optional<int> weight)
         {
             return LoadSystemFont(name, size,
                 weight.value_or(400));
-        };
+        }).names({"name", "size", "weight"});
 
-    res["fontFile"] = [this](std::string path,
+    binder.func("fontFile", [this](std::string path,
         std::string family,
         float size)
         {
             return LoadFontFile(path, family, size);
-        };
+        }).names({"path", "family", "size"});
 
-    res["sound"] = [this](std::string path)
+    binder.func("sound", [this](std::string path)
         {
             return LoadSound(path);
-        };
+        }).names({"path"});
 
     // JSON 입출력
-    res["loadjson"] = [](std::string path, sol::this_state s) -> sol::object {
+    binder.func("loadjson", [](std::string path, sol::this_state s) -> sol::object {
         std::ifstream file(path);
         if (!file.is_open()) {
             printf("[RES] json fail: %s\n", path.c_str());
@@ -468,16 +468,16 @@ void ResourceHub::BindLua(sol::state& lua, const char* name)
             printf("[RES] json fail: %s\n", path.c_str());
             return sol::nil;
         }
-    };
+    }).names({"path"});
 
-    res["savejson"] = [](std::string path, sol::object table) -> bool {
+    binder.func("savejson", [](std::string path, sol::object data) -> bool {
         std::ofstream file(path);
         if (!file.is_open()) {
             printf("[RES] json save fail: %s\n", path.c_str());
             return false;
         }
         try {
-            json j = convert_table_to_json(table);
+            json j = convert_table_to_json(data);
             file << j.dump(4);
             printf("[RES] json save: %s\n", path.c_str());
             return true;
@@ -486,7 +486,7 @@ void ResourceHub::BindLua(sol::state& lua, const char* name)
             printf("[RES] json save fail: %s\n", path.c_str());
             return false;
         }
-    };
+    }).names({"path", "data"});
 }
 ID2D1Bitmap* ResourceHub::GetBitmap(int id)
 {

@@ -22,16 +22,16 @@ static int IniHandler(
 	return 1;
 }
 
-void Window::BindToLuaInput(sol::state& lua, const char* name) {
-    sol::table i = lua.create_named_table(name);
+void Window::BindToLuaInput(LuaBindContext& ctx) {
+    LuaNamespaceBinder binder(ctx);
 
     // key state
-    i["key"] = [](int vkey) -> bool {
+    binder.func("key", [](int vkey) -> bool {
         return (GetAsyncKeyState(vkey) & 0x8000) != 0;
-    };
+    }).names({"vkey"});
 
     // mouse info (x, y, left, right)
-    i["mouse"] = [this]() {
+    binder.func("mouse", [this]() {
         POINT pt;
         GetCursorPos(&pt);
         ScreenToClient(hwnd, &pt);
@@ -40,31 +40,31 @@ void Window::BindToLuaInput(sol::state& lua, const char* name) {
         bool right = (GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0;
 
         return std::make_tuple(pt.x, pt.y, left, right);
-    };
+    }).returns("integer, integer, boolean, boolean");
 
-    i["pos"] = [this]() {
+    binder.func("pos", [this]() {
         RECT rc;
         GetWindowRect(hwnd, &rc);
         return std::make_tuple(rc.left, rc.top);
-    };
+    }).returns("integer, integer");
 
-    i["size"] = [this]() {
+    binder.func("size", [this]() {
         RECT rc;
         GetWindowRect(hwnd, &rc);
         return std::make_tuple((int)(rc.right - rc.left), (int)(rc.bottom - rc.top));
-    };
+    }).returns("integer, integer");
 
-    i["workArea"] = []() {
+    binder.func("workArea", []() {
         RECT rc;
         SystemParametersInfo(SPI_GETWORKAREA, 0, &rc, 0);
         return std::make_tuple((int)(rc.right - rc.left), (int)(rc.bottom - rc.top));
-    };
+    }).returns("integer, integer");
 
-    i["screenSize"] = []() {
+    binder.func("screenSize", []() {
         return std::make_tuple(GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
-    };
+    }).returns("integer, integer");
 
-    i["monitors"] = [](sol::this_state ts) {
+    binder.func("monitors", [](sol::this_state ts) {
         sol::state_view lua(ts);
         sol::table monitorList = lua.create_table();
 
@@ -94,16 +94,17 @@ void Window::BindToLuaInput(sol::state& lua, const char* name) {
         EnumDisplayMonitors(NULL, NULL, (MONITORENUMPROC)+callback, (LPARAM)&monitorList);
 
         return monitorList;
-    };
+    }).returns("table");
 
     // fps/vsync info from window config (read-only)
-    i["fpsMode"] = [this]() {
+    binder.func("fpsMode", [this]() {
         return std::make_tuple(config.getFPS(), config.getVSync());
-    };
-    i["config"] = [this](sol::this_state ts) {
+    }).returns("integer, boolean");
+
+    binder.func("config", [this](sol::this_state ts) {
         sol::state_view lua(ts);
         sol::table root = lua.create_table();
-        
+
         // Convert entire data map to nested Lua tables
         for (const auto& section : config.data) {
             sol::table sectionTable = lua.create_table();
@@ -112,55 +113,52 @@ void Window::BindToLuaInput(sol::state& lua, const char* name) {
             }
             root[section.first] = sectionTable;
         }
-        
-        return root;
-    };
-    i["focus"] = [this]() -> bool {
-        // 현재 윈도우 시스템에서 가장 앞에 나와 있는(포커스된) 창의 핸들을 가져옵니다.
-        HWND foregroundHwnd = GetForegroundWindow();
 
-        // 그 핸들이 현재 클래스가 받고 있는 hwnd와 일치하는지 반환합니다.
+        return root;
+    }).returns("table");
+
+    binder.func("focus", [this]() -> bool {
+        HWND foregroundHwnd = GetForegroundWindow();
         return foregroundHwnd == hwnd;
-        };
+    });
 }
 
-void Window::BindToLuaSys(sol::state& lua, const char* name) {
-    sol::table s = lua.create_named_table(name);
+void Window::BindToLuaSys(LuaBindContext& ctx) {
+    LuaNamespaceBinder binder(ctx);
 
     // set window size
-    s["size"] = [this](int w, int h) {
+    binder.func("size", [this](int w, int h) {
         if (hwnd) {
             SetWindowPos(hwnd, NULL, 0, 0, w, h, SWP_NOMOVE | SWP_NOZORDER);
             config.data["Window"]["width"] = std::to_string(w);
             config.data["Window"]["height"] = std::to_string(h);
             if (sizeCallback) sizeCallback(w, h);
         }
-    };
+    }).names({"w", "h"});
 
     // set window position
-    s["pos"] = [this](int x, int y) {
+    binder.func("pos", [this](int x, int y) {
         if (hwnd) {
             SetWindowPos(hwnd, NULL, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER);
         }
-    };
+    }).names({"x", "y"});
 
     // cursor show/hide
-    s["showCursor"] = [](bool show) {
-        // ShowCursor uses a display counter, not a simple on/off state
-        // Call it repeatedly until the cursor reaches the desired visibility
+    binder.func("showCursor", [](bool show) {
         if (show) {
-            while (ShowCursor(TRUE) < 0);  // counter >= 0 means visible
+            while (ShowCursor(TRUE) < 0);
         } else {
-            while (ShowCursor(FALSE) >= 0); // counter < 0 means hidden
+            while (ShowCursor(FALSE) >= 0);
         }
-    };
+    }).names({"show"});
 
     // set cursor by resource id/name
-    s["cursor"] = [](sol::optional<int> type) {
+    binder.func("cursor", [](std::optional<int> type) {
         HCURSOR hCursor = LoadCursor(NULL, MAKEINTRESOURCE(type.value_or(32512)));
         SetCursor(hCursor);
-    };
-    s["clip"] = [this](bool clip) {
+    }).names({"type"});
+
+    binder.func("clip", [this](bool clip) {
         if (clip && hwnd) {
             RECT rect;
             GetClientRect(hwnd, &rect);
@@ -171,27 +169,28 @@ void Window::BindToLuaSys(sol::state& lua, const char* name) {
         else {
             ClipCursor(NULL);
         }
-        };
+    }).names({"clip"});
+
     // topmost
-    s["topmost"] = [this](bool topmost) {
+    binder.func("topmost", [this](bool topmost) {
         if (hwnd) {
             HWND hWndInsertAfter = topmost ? HWND_TOPMOST : HWND_NOTOPMOST;
             SetWindowPos(hwnd, hWndInsertAfter, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         }
-    };
+    }).names({"topmost"});
 
     // open URL
-    s["openURL"] = [](const std::string& url) {
+    binder.func("openURL", [](const std::string& url) {
         if (!url.empty()) {
             ShellExecuteA(NULL, "open", url.c_str(), NULL, NULL, SW_SHOWNORMAL);
         }
-    };
+    }).names({"url"});
 
     // quit
-    s["quit"] = []() {
+    binder.func("quit", []() {
         PostQuitMessage(0);
-    };
+    });
 }
 WindowConfig Window::LoadConfig(const wchar_t* path) {
 	WindowConfig cfg;

@@ -1,4 +1,5 @@
 #include "includesol.h"
+#include "luabind.h"
 #include <soloud.h>
 #include <soloud_wav.h>
 #include <vector>
@@ -8,7 +9,7 @@ public:
 	SoundSystem();
 	~SoundSystem();
 	void Init();
-	void BindToLua(sol::state& lua, const char* name);
+	void BindToLua(LuaBindContext& ctx);
 private:
 	SoLoud::Soloud m_soloud;
 };

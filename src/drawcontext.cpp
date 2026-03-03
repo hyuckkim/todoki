@@ -282,7 +282,9 @@ void DrawContext::draw(DrawContext* source, float x, float y,
     }
 }
 
-void DrawContext::BindGlobal(sol::state& lua, const char* name) {
+void DrawContext::BindGlobal(LuaBindContext& ctx) {
+    sol::state& lua = ctx.lua;
+
     // 1. 오프스크린 객체(Canvas)를 위한 타입 정의
     // (객체는 생성 후 canvas:rect() 처럼 콜론(:)으로 호출합니다)
     lua.new_usertype<DrawContext>("Canvas",
@@ -303,46 +305,83 @@ void DrawContext::BindGlobal(sol::state& lua, const char* name) {
         "scale", &DrawContext::scale
     );
 
+    // Record Canvas class methods for stub generation
+    LuaClassBinder canvas(ctx.def, "Canvas");
+    canvas
+        .method("batchBegin", &DrawContext::batchBegin)
+        .method("batchEnd", &DrawContext::batchEnd)
+        .method("rect", &DrawContext::rect)
+            .names({"x", "y", "w", "h", "fill"})
+        .method("circle", &DrawContext::circle)
+            .names({"x", "y", "r", "fill"})
+        .method("polyline", &DrawContext::polyline)
+            .names({"vertices", "closed"})
+        .method("polygon", &DrawContext::polygon)
+            .names({"vertices"})
+        .method("text", &DrawContext::text)
+            .names({"fontId", "str", "x", "y"})
+        .method("image", &DrawContext::image)
+            .names({"id", "dx", "dy", "dw", "dh", "sx", "sy", "sw", "sh", "alpha"})
+        .method("color", &DrawContext::color)
+            .names({"arg1", "arg2", "arg3", "arg4"})
+        .method("lineWidth", &DrawContext::setStrokeWidth)
+            .names({"width"})
+        .method("push", &DrawContext::push)
+        .method("pop", &DrawContext::pop)
+        .method("translate", &DrawContext::translate)
+            .names({"x", "y"})
+        .method("scale", &DrawContext::scale)
+            .names({"sx", "sy", "ox", "oy"});
+
     // 2. 전역 테이블 'g' 생성 (this가 고정된 헬퍼 테이블)
-    auto g = lua.create_named_table(name);
+    LuaNamespaceBinder binder(ctx);
 
     // --- 기본 도형 ---
-    g["rect"] = [this](float x, float y, float w, float h, sol::optional<bool> f) { rect(x, y, w, h, f); };
-    g["circle"] = [this](float x, float y, float r, sol::optional<bool> f) { circle(x, y, r, f); };
+    binder.func("rect", [this](float x, float y, float w, float h, std::optional<bool> f) { rect(x, y, w, h, f); })
+        .names({"x", "y", "w", "h", "fill"});
+    binder.func("circle", [this](float x, float y, float r, std::optional<bool> f) { circle(x, y, r, f); })
+        .names({"x", "y", "r", "fill"});
 
     // --- 폴리곤 / 폴리라인 (테이블 인자) ---
-    g["polyline"] = [this](sol::table t, sol::optional<bool> c) { polyline(t, c); };
-    g["polygon"] = [this](sol::table t) { polygon(t); };
+    binder.func("polyline", [this](sol::table t, std::optional<bool> c) { polyline(t, c); })
+        .names({"vertices", "closed"});
+    binder.func("polygon", [this](sol::table t) { polygon(t); })
+        .names({"vertices"});
 
     // --- 텍스트 / 이미지 ---
-    g["text"] = [this](int fontId, std::string s, float x, float y) { text(fontId, s, x, y); };
-    g["image"] = [this](int id, float dx, float dy,
-        sol::optional<float> dw, sol::optional<float> dh,
-        sol::optional<float> sx, sol::optional<float> sy,
-        sol::optional<float> sw, sol::optional<float> sh,
-        sol::optional<float> a) {
+    binder.func("text", [this](int fontId, std::string s, float x, float y) { text(fontId, s, x, y); })
+        .names({"fontId", "str", "x", "y"});
+    binder.func("image", [this](int id, float dx, float dy,
+        std::optional<float> dw, std::optional<float> dh,
+        std::optional<float> sx, std::optional<float> sy,
+        std::optional<float> sw, std::optional<float> sh,
+        std::optional<float> a) {
             image(id, dx, dy, dw, dh, sx, sy, sw, sh, a);
-        };
+        }).names({"id", "dx", "dy", "dw", "dh", "sx", "sy", "sw", "sh", "alpha"});
 
     // --- 오프스크린 & 드로우 ---
-    g["offscreen"] = [this](float w, float h) { return createOffscreen(w, h); };
-    g["draw"] = [this](DrawContext* src, float x, float y,
-        sol::optional<float> w, sol::optional<float> h,
-        sol::optional<float> sx, sol::optional<float> sy,
-        sol::optional<float> sw, sol::optional<float> sh,
-        sol::optional<float> a) {
+    binder.func("offscreen", [this](float w, float h) { return createOffscreen(w, h); })
+        .names({"w", "h"});
+    binder.func("draw", [this](DrawContext* src, float x, float y,
+        std::optional<float> w, std::optional<float> h,
+        std::optional<float> sx, std::optional<float> sy,
+        std::optional<float> sw, std::optional<float> sh,
+        std::optional<float> a) {
             draw(src, x, y, w, h, sx, sy, sw, sh, a);
-        };
+        }).names({"canvas", "x", "y", "w", "h", "sx", "sy", "sw", "sh", "alpha"});
 
     // --- 상태 관리 및 속성 ---
-
-    g["color"] = [this](sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4) {
-		color(arg1, arg2, arg3, arg4);
-        };
-    g["lineWidth"] = [this](float w) { setStrokeWidth(w); };
-    g["push"] = [this]() { push(); };
-    g["pop"] = [this]() { pop(); };
-    g["translate"] = [this](float x, float y) { translate(x, y); };
-    g["scale"] = [this](float sx, float sy, sol::optional<float> ox, sol::optional<float> oy) { scale(sx, sy, ox, oy); };
-    g["clip"] = [this](float x, float y, float w, float h) { clip(x, y, w, h); };
+    binder.func("color", [this](sol::object arg1, std::optional<float> arg2, std::optional<float> arg3, std::optional<float> arg4) {
+        color(arg1, arg2, arg3, arg4);
+    }).names({"arg1", "arg2", "arg3", "arg4"});
+    binder.func("lineWidth", [this](float w) { setStrokeWidth(w); })
+        .names({"width"});
+    binder.func("push", [this]() { push(); });
+    binder.func("pop", [this]() { pop(); });
+    binder.func("translate", [this](float x, float y) { translate(x, y); })
+        .names({"x", "y"});
+    binder.func("scale", [this](float sx, float sy, std::optional<float> ox, std::optional<float> oy) { scale(sx, sy, ox, oy); })
+        .names({"sx", "sy", "ox", "oy"});
+    binder.func("clip", [this](float x, float y, float w, float h) { clip(x, y, w, h); })
+        .names({"x", "y", "w", "h"});
 }

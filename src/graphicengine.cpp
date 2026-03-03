@@ -212,6 +212,6 @@ void GraphicEngine::Release() {
     }
 }
 
-void GraphicEngine::BindToLua(sol::state& lua, const char* name) {
-    if (m_drawContext) m_drawContext->BindGlobal(lua, name);
+void GraphicEngine::BindToLua(LuaBindContext& ctx) {
+    if (m_drawContext) m_drawContext->BindGlobal(ctx);
 }

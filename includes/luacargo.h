@@ -1,11 +1,11 @@
 #pragma once
-#include "includesol.h"
+#include "luabind.h"
 #include <string>
 #include <optional>
 #include <functional>
 
 struct LuaBinding {
-    std::function<void(sol::state&, const char*)> bindFunc;
+    std::function<void(LuaBindContext&)> bindFunc;
     std::string name;
 };
 

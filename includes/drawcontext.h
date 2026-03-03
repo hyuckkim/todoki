@@ -4,6 +4,7 @@
 #include <wrl/client.h>
 #include <vector>
 #include "includesol.h"
+#include "luabind.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -18,7 +19,7 @@ class DrawContext {
 public:
     DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory);
     ~DrawContext();
-    void BindGlobal(sol::state& lua, const char* name);
+    void BindGlobal(LuaBindContext& ctx);
 
     // 기본 그리기 함수
     void rect(float x, float y, float w, float h, sol::optional<bool> fill);

@@ -1,5 +1,6 @@
 #include "includesol.h"
 #include "luacargo.h"
+#include "luadef.h"
 
 bool LuaCargo::Init(const char* entry, const std::vector<LuaBinding>& systems) {
 	lua = sol::state();
@@ -16,12 +17,24 @@ bool LuaCargo::Init(const char* entry, const std::vector<LuaBinding>& systems) {
         sol::lib::os
     );
 
+#ifdef _DEBUG
+    LuaDefBuilder defBuilder;
+    LuaDefBuilder* defPtr = &defBuilder;
+#else
+    LuaDefBuilder* defPtr = nullptr;
+#endif
+
     for (const auto& system : systems) {
         if (system.bindFunc) {
-            system.bindFunc(lua, system.name.c_str());
+            LuaBindContext ctx{ lua, defPtr, system.name.c_str() };
+            system.bindFunc(ctx);
             printf("[LUA] System '%s' bound successfully.\n", system.name.c_str());
         }
     }
+
+#ifdef _DEBUG
+    defBuilder.Write("_globalDef.lua");
+#endif
 
     auto load_result = lua.script_file(entry, sol::script_pass_on_error);
     if (!load_result.valid()) {
