@@ -5,6 +5,8 @@
 #include <map>
 #include "includesol.h"
 
+struct LuaBindContext;
+
 struct WindowConfig {
     // Section -> Key -> Value mapping (all stored as strings)
     std::map<std::string, std::map<std::string, std::string>> data;
@@ -136,9 +138,9 @@ public:
     using SizeCallback = std::function<void(int w, int h)>;
     void SetSizeCallback(SizeCallback cb) { sizeCallback = cb; }
     // Bind read-only input/state into Lua (name e.g. "is")
-    void BindToLuaInput(sol::state& lua, const char* name);
+    void BindToLuaInput(LuaBindContext& ctx);
     // Bind controllable window/system functions into Lua (name e.g. "sys")
-    void BindToLuaSys(sol::state& lua, const char* name);
+    void BindToLuaSys(LuaBindContext& ctx);
 
 private:
     MessageCallback messageCallback;

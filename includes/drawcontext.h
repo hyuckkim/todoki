@@ -5,6 +5,8 @@
 #include <vector>
 #include "includesol.h"
 
+struct LuaBindContext;
+
 using Microsoft::WRL::ComPtr;
 
 // 상태 스택 레이어
@@ -18,7 +20,7 @@ class DrawContext {
 public:
     DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory);
     ~DrawContext();
-    void BindGlobal(sol::state& lua, const char* name);
+    void BindGlobal(LuaBindContext& ctx);
 
     // 기본 그리기 함수
     void rect(float x, float y, float w, float h, sol::optional<bool> fill);

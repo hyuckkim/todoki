@@ -11,6 +11,8 @@
 #include <string>
 #include <memory>
 
+struct LuaBindContext;
+
 using Microsoft::WRL::ComPtr;
 
 class CustomFontFileEnumerator : public IDWriteFontFileEnumerator {
@@ -56,7 +58,7 @@ public:
 
     void Shutdown();
 
-    void BindLua(sol::state& lua, const char* name);
+    void BindLua(LuaBindContext& ctx);
 
     ID2D1Bitmap* GetBitmap(int id);
     IDWriteTextFormat* GetFont(int id);

@@ -10,6 +10,8 @@
 #include "drawcontext.h"
 #include "window.h"
 
+struct LuaBindContext;
+
 using Microsoft::WRL::ComPtr;
 
 class GraphicEngine {
@@ -20,7 +22,7 @@ public:
     void Release();
 
     void Resize(int width, int height);
-    void BindToLua(sol::state& lua, const char* name);
+    void BindToLua(LuaBindContext& ctx);
 
 private:
     bool InitCom();

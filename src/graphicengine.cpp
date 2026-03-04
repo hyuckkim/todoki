@@ -9,6 +9,7 @@
 #include "drawcontext.h"
 #include "window.h"
 #include "resourcehub.h"
+#include "luabind.h"
 
 bool GraphicEngine::Init(HWND hwnd, WindowConfig cfg) {
     m_hwnd = hwnd;
@@ -212,6 +213,6 @@ void GraphicEngine::Release() {
     }
 }
 
-void GraphicEngine::BindToLua(sol::state& lua, const char* name) {
-    if (m_drawContext) m_drawContext->BindGlobal(lua, name);
+void GraphicEngine::BindToLua(LuaBindContext& ctx) {
+    if (m_drawContext) m_drawContext->BindGlobal(ctx);
 }

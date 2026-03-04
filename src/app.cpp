@@ -50,19 +50,23 @@ bool App::Init(HINSTANCE hInstance, int nCmdShow, const char* entryPath) {
         MessageBoxA(NULL, "Lua initialization failed. Check script path and errors.", "Init Error", MB_OK | MB_ICONERROR);
         return false;
     }
+#ifdef _DEBUG
+    m_lua.WriteDefinitions();
+#endif
+
     m_lua.Call("Init");
     return true;
 }
 
 void App::SetupBindings() {
 #define BIND(obj, func, name) \
-        LuaBinding([&](sol::state& s, const char* n) { (obj).func(s, n); }, name)
+        LuaBinding{[&](LuaBindContext& ctx) { (obj).func(ctx); }, name}
 
     m_systems = {
         BIND(m_engine, BindToLua, "g"),
         BIND(ResourceHub::Instance(), BindLua, "res"),
-		BIND(m_window, BindToLuaInput, "is"),
-		BIND(m_window, BindToLuaSys, "sys"),
+        BIND(m_window, BindToLuaInput, "is"),
+        BIND(m_window, BindToLuaSys, "sys"),
         BIND(m_sound, BindToLua, "snd")
     };
 

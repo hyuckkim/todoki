@@ -3,6 +3,7 @@
 #include <wrl/client.h>
 #include "resourcehub.h"
 #include "util.h"
+#include "luabind.h"
 
 using Microsoft::WRL::ComPtr;
 
@@ -282,67 +283,108 @@ void DrawContext::draw(DrawContext* source, float x, float y,
     }
 }
 
-void DrawContext::BindGlobal(sol::state& lua, const char* name) {
-    // 1. 오프스크린 객체(Canvas)를 위한 타입 정의
-    // (객체는 생성 후 canvas:rect() 처럼 콜론(:)으로 호출합니다)
-    lua.new_usertype<DrawContext>("Canvas",
-        sol::no_constructor,
-        "batchBegin", &DrawContext::batchBegin,
-        "batchEnd", &DrawContext::batchEnd,
-        "rect", &DrawContext::rect,
-        "circle", &DrawContext::circle,
-        "polyline", &DrawContext::polyline,
-        "polygon", &DrawContext::polygon,
-        "text", &DrawContext::text,
-        "image", &DrawContext::image,
-        "color", &DrawContext::color,
-        "lineWidth", &DrawContext::setStrokeWidth,
-        "push", &DrawContext::push,
-        "pop", &DrawContext::pop,
-        "translate", &DrawContext::translate,
-        "scale", &DrawContext::scale
-    );
-
-    // 2. 전역 테이블 'g' 생성 (this가 고정된 헬퍼 테이블)
-    auto g = lua.create_named_table(name);
+void DrawContext::BindGlobal(LuaBindContext& ctx) {
+    LuaNamespaceBinder binder(ctx);
 
     // --- 기본 도형 ---
-    g["rect"] = [this](float x, float y, float w, float h, sol::optional<bool> f) { rect(x, y, w, h, f); };
-    g["circle"] = [this](float x, float y, float r, sol::optional<bool> f) { circle(x, y, r, f); };
+    binder.func("rect", [this](float x, float y, float w, float h, sol::optional<bool> f) { 
+        rect(x, y, w, h, f); 
+    })
+    .names({"x", "y", "w", "h", "fill"})
+    .desc("Draw a rectangle at (x, y) with size (w, h). Set fill=true for filled");
+
+    binder.func("circle", [this](float x, float y, float r, sol::optional<bool> f) { 
+        circle(x, y, r, f); 
+    })
+    .names({"x", "y", "r", "fill"})
+    .desc("Draw a circle at (x, y) with radius r. Set fill=true for filled");
 
     // --- 폴리곤 / 폴리라인 (테이블 인자) ---
-    g["polyline"] = [this](sol::table t, sol::optional<bool> c) { polyline(t, c); };
-    g["polygon"] = [this](sol::table t) { polygon(t); };
+    binder.func("polyline", [this](sol::table t, sol::optional<bool> c) { 
+        polyline(t, c); 
+    })
+    .names({"vertices", "closed"})
+    .desc("Draw a polyline through vertices {x1,y1, x2,y2, ...}. Set closed=true to close the path");
+
+    binder.func("polygon", [this](sol::table t) { 
+        polygon(t); 
+    })
+    .names({"vertices"})
+    .desc("Draw a filled polygon with vertices {x1,y1, x2,y2, ...}");
 
     // --- 텍스트 / 이미지 ---
-    g["text"] = [this](int fontId, std::string s, float x, float y) { text(fontId, s, x, y); };
-    g["image"] = [this](int id, float dx, float dy,
+    binder.func("text", [this](int fontId, std::string s, float x, float y) { 
+        text(fontId, s, x, y); 
+    })
+    .names({"fontId", "str", "x", "y"})
+    .desc("Draw text string at (x, y) using the specified font");
+
+    binder.func("image", [this](int id, float dx, float dy,
         sol::optional<float> dw, sol::optional<float> dh,
         sol::optional<float> sx, sol::optional<float> sy,
         sol::optional<float> sw, sol::optional<float> sh,
         sol::optional<float> a) {
             image(id, dx, dy, dw, dh, sx, sy, sw, sh, a);
-        };
+    })
+    .names({"id", "dx", "dy", "dw", "dh", "sx", "sy", "sw", "sh", "alpha"})
+    .desc("Draw image at (dx, dy) with optional size, source rect, and alpha");
 
     // --- 오프스크린 & 드로우 ---
-    g["offscreen"] = [this](float w, float h) { return createOffscreen(w, h); };
-    g["draw"] = [this](DrawContext* src, float x, float y,
+    binder.func("offscreen", [this](float w, float h) { 
+        return createOffscreen(w, h); 
+    })
+    .names({"w", "h"})
+    .returns("any")
+    .desc("Create an offscreen canvas with size (w, h)");
+
+    binder.func("draw", [this](DrawContext* src, float x, float y,
         sol::optional<float> w, sol::optional<float> h,
         sol::optional<float> sx, sol::optional<float> sy,
         sol::optional<float> sw, sol::optional<float> sh,
         sol::optional<float> a) {
             draw(src, x, y, w, h, sx, sy, sw, sh, a);
-        };
+    })
+    .names({"source", "x", "y", "w", "h", "sx", "sy", "sw", "sh", "alpha"})
+    .desc("Draw an offscreen canvas at (x, y) with optional size, source rect, and alpha");
 
     // --- 상태 관리 및 속성 ---
+    binder.func("color", [this](sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4) {
+        color(arg1, arg2, arg3, arg4);
+    })
+    .names({"arg1", "arg2", "arg3", "arg4"})
+    .desc("Set drawing color. Use color(r,g,b,a) or color(0xRRGGBB) or color(0xRRGGBBAA)");
 
-    g["color"] = [this](sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4) {
-		color(arg1, arg2, arg3, arg4);
-        };
-    g["lineWidth"] = [this](float w) { setStrokeWidth(w); };
-    g["push"] = [this]() { push(); };
-    g["pop"] = [this]() { pop(); };
-    g["translate"] = [this](float x, float y) { translate(x, y); };
-    g["scale"] = [this](float sx, float sy, sol::optional<float> ox, sol::optional<float> oy) { scale(sx, sy, ox, oy); };
-    g["clip"] = [this](float x, float y, float w, float h) { clip(x, y, w, h); };
+    binder.func("lineWidth", [this](float w) { 
+        setStrokeWidth(w); 
+    })
+    .names({"w"})
+    .desc("Set line width for stroke drawing");
+
+    binder.func("push", [this]() { 
+        push(); 
+    })
+    .desc("Push current transform and clip state onto stack");
+
+    binder.func("pop", [this]() { 
+        pop(); 
+    })
+    .desc("Pop transform and clip state from stack");
+
+    binder.func("translate", [this](float x, float y) { 
+        translate(x, y); 
+    })
+    .names({"x", "y"})
+    .desc("Translate (move) the coordinate system by (x, y)");
+
+    binder.func("scale", [this](float sx, float sy, sol::optional<float> ox, sol::optional<float> oy) { 
+        scale(sx, sy, ox, oy); 
+    })
+    .names({"sx", "sy", "ox", "oy"})
+    .desc("Scale the coordinate system by (sx, sy) around origin (ox, oy)");
+
+    binder.func("clip", [this](float x, float y, float w, float h) { 
+        clip(x, y, w, h); 
+    })
+    .names({"x", "y", "w", "h"})
+    .desc("Set clipping rectangle to (x, y, w, h)");
 }

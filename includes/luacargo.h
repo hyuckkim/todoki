@@ -1,11 +1,12 @@
 #pragma once
 #include "includesol.h"
+#include "luabind.h"
 #include <string>
 #include <optional>
 #include <functional>
 
 struct LuaBinding {
-    std::function<void(sol::state&, const char*)> bindFunc;
+    std::function<void(LuaBindContext&)> bindFunc;
     std::string name;
 };
 
@@ -40,8 +41,12 @@ public:
         }
 	}
 
+    void WriteDefinitions(const char* path = "_globalDef.lua");
+
 private:
 	sol::state lua;
+    LuaDefBuilder defBuilder;
+    
     void HandleResult(
         const std::string& func,
         const sol::protected_function_result& result

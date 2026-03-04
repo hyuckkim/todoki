@@ -18,7 +18,8 @@ bool LuaCargo::Init(const char* entry, const std::vector<LuaBinding>& systems) {
 
     for (const auto& system : systems) {
         if (system.bindFunc) {
-            system.bindFunc(lua, system.name.c_str());
+            LuaBindContext ctx{lua, &defBuilder, system.name.c_str()};
+            system.bindFunc(ctx);
             printf("[LUA] System '%s' bound successfully.\n", system.name.c_str());
         }
     }
@@ -31,6 +32,10 @@ bool LuaCargo::Init(const char* entry, const std::vector<LuaBinding>& systems) {
     }
     printf("Lua Engine Initialized.\n");
     return true;
+}
+
+void LuaCargo::WriteDefinitions(const char* path) {
+    defBuilder.Write(path);
 }
 
 void LuaCargo::HandleResult(const std::string& func, const sol::protected_function_result& result)

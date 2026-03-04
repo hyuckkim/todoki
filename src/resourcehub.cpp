@@ -4,6 +4,7 @@
 #include "util.h"
 #include <fstream>
 #include <nlohmann/json.hpp>
+#include "luabind.h"
 
 using json = nlohmann::json;
 
@@ -411,47 +412,49 @@ int ResourceHub::LoadSound(const std::string& path)
     printf("[RES] sound: %s\n", path.c_str());
     return id;
 }
-void ResourceHub::BindLua(sol::state& lua, const char* name)
+void ResourceHub::BindLua(LuaBindContext& ctx)
 {
-    auto res = lua.create_named_table(name);
+    LuaNamespaceBinder binder(ctx);
 
-    res["image"] = [this](std::string path)
-        {
-            auto it = m_pathCache.find(path);
-            if (it != m_pathCache.end())
-                return it->second;
+    binder.func("image", [this](std::string path) {
+        auto it = m_pathCache.find(path);
+        if (it != m_pathCache.end())
+            return it->second;
 
-            auto bmp = LoadBitmapFromFile(path);
-            if (!bmp) return -1;
+        auto bmp = LoadBitmapFromFile(path);
+        if (!bmp) return -1;
 
-            int id = (int)m_bitmaps.size();
-            m_bitmaps.push_back(bmp);
-            m_pathCache[path] = id;
-            return id;
-        };
+        int id = (int)m_bitmaps.size();
+        m_bitmaps.push_back(bmp);
+        m_pathCache[path] = id;
+        return id;
+    })
+    .names({"path"})
+    .returns("integer")
+    .desc("Load an image from file and return its resource ID");
 
-    res["font"] = [this](std::string name,
-        float size,
-        sol::optional<int> weight)
-        {
-            return LoadSystemFont(name, size,
-                weight.value_or(400));
-        };
+    binder.func("font", [this](std::string name, float size, sol::optional<int> weight) {
+        return LoadSystemFont(name, size, weight.value_or(400));
+    })
+    .names({"name", "size", "weight"})
+    .returns("integer")
+    .desc("Load a system font with name, size, and optional weight (default 400)");
 
-    res["fontFile"] = [this](std::string path,
-        std::string family,
-        float size)
-        {
-            return LoadFontFile(path, family, size);
-        };
+    binder.func("fontFile", [this](std::string path, std::string family, float size) {
+        return LoadFontFile(path, family, size);
+    })
+    .names({"path", "family", "size"})
+    .returns("integer")
+    .desc("Load a font from file with family name and size");
 
-    res["sound"] = [this](std::string path)
-        {
-            return LoadSound(path);
-        };
+    binder.func("sound", [this](std::string path) {
+        return LoadSound(path);
+    })
+    .names({"path"})
+    .returns("integer")
+    .desc("Load a sound file and return its resource ID");
 
-    // JSON 입출력
-    res["loadjson"] = [](std::string path, sol::this_state s) -> sol::object {
+    binder.func("loadjson", [](std::string path, sol::this_state s) -> sol::object {
         std::ifstream file(path);
         if (!file.is_open()) {
             printf("[RES] json fail: %s\n", path.c_str());
@@ -468,9 +471,12 @@ void ResourceHub::BindLua(sol::state& lua, const char* name)
             printf("[RES] json fail: %s\n", path.c_str());
             return sol::nil;
         }
-    };
+    })
+    .names({"path"})
+    .returns("any")
+    .desc("Load a JSON file and convert it to a Lua table");
 
-    res["savejson"] = [](std::string path, sol::object table) -> bool {
+    binder.func("savejson", [](std::string path, sol::object table) -> bool {
         std::ofstream file(path);
         if (!file.is_open()) {
             printf("[RES] json save fail: %s\n", path.c_str());
@@ -486,7 +492,10 @@ void ResourceHub::BindLua(sol::state& lua, const char* name)
             printf("[RES] json save fail: %s\n", path.c_str());
             return false;
         }
-    };
+    })
+    .names({"path", "table"})
+    .returns("boolean")
+    .desc("Save a Lua table to a JSON file");
 }
 ID2D1Bitmap* ResourceHub::GetBitmap(int id)
 {
