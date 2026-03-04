@@ -61,8 +61,6 @@ private:
     ComPtr<ID2D1RenderTarget> m_rt;
 	ComPtr<ID2D1Factory1> m_factory;
     ComPtr<ID2D1SolidColorBrush> m_brush;
-    ComPtr<ID3D11Device> m_d3dDevice;
-    ComPtr<ID3D11DeviceContext> m_d3dContext;
 
     D2D1_COLOR_F m_color = D2D1::ColorF(1, 1, 1, 1);
     float m_strokeWidth = 1.0f;

@@ -12,23 +12,11 @@ DrawContext::DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory
 {
     if (m_rt) {
         m_rt->CreateSolidColorBrush(m_color, &m_brush);
-
-        // D3D11 device 획득 (D2D RenderTarget → Device)
-        ComPtr<ID2D1Device> d2dDevice;
-        if (SUCCEEDED(m_rt->QueryInterface(IID_PPV_ARGS(&d2dDevice)))) {
-            d2dDevice->QueryInterface(IID_PPV_ARGS(&m_d3dDevice));
-        }
-        
-        if (m_d3dDevice) {
-            m_d3dDevice->GetImmediateContext(&m_d3dContext);
-        }
     }
 }
 
 DrawContext::~DrawContext() {
     m_brush.Reset();
-    m_d3dContext.Reset();
-    m_d3dDevice.Reset();
     m_rt.Reset();
 }
 
@@ -49,13 +37,17 @@ void DrawContext::circle(float x, float y, float r, sol::optional<bool> fill) {
 
 void DrawContext::polyline(sol::table vertices, sol::optional<bool> closed) {
     if (!m_rt || !m_factory || vertices.size() < 4) return;
+    
+    // 좌표 쌍을 위해 배열 크기가 짝수여야 함
+    if (vertices.size() % 2 != 0) return;
+    
     ComPtr<ID2D1PathGeometry> path;
     m_factory->CreatePathGeometry(&path);
     ComPtr<ID2D1GeometrySink> sink;
     path->Open(&sink);
 
     sink->BeginFigure(D2D1::Point2F(vertices[1], vertices[2]), D2D1_FIGURE_BEGIN_FILLED);
-    for (size_t i = 3; i <= vertices.size(); i += 2) {
+    for (size_t i = 3; i < vertices.size(); i += 2) {
         sink->AddLine(D2D1::Point2F(vertices[i], vertices[i + 1]));
     }
     sink->EndFigure(closed.value_or(false) ? D2D1_FIGURE_END_CLOSED : D2D1_FIGURE_END_OPEN);
@@ -65,12 +57,16 @@ void DrawContext::polyline(sol::table vertices, sol::optional<bool> closed) {
 
 void DrawContext::polygon(sol::table vertices) {
     if (!m_rt || !m_factory || vertices.size() < 6) return;
+    
+    // 좌표 쌍을 위해 배열 크기가 짝수여야 함
+    if (vertices.size() % 2 != 0) return;
+    
     ComPtr<ID2D1PathGeometry> path;
     m_factory->CreatePathGeometry(&path);
     ComPtr<ID2D1GeometrySink> sink;
     path->Open(&sink);
-    sink->BeginFigure(D2D1::Point2F(vertices[1], vertices[2]), D2D1_FIGURE_BEGIN_FILLED);
-    for (size_t i = 3; i <= vertices.size(); i += 2) {
+    sink->BeginFigure(D2D1::Point2F(vertices[1], vertices[2]), D2D1_FIGURE_BEGIN_HOLLOW);
+    for (size_t i = 3; i < vertices.size(); i += 2) {
         sink->AddLine(D2D1::Point2F(vertices[i], vertices[i + 1]));
     }
     sink->EndFigure(D2D1_FIGURE_END_CLOSED);
@@ -152,7 +148,7 @@ void DrawContext::scale(float sx, float sy, sol::optional<float> ox, sol::option
     if (!m_rt) return;
     D2D1_MATRIX_3X2_F m;
     m_rt->GetTransform(&m);
-    m_rt->SetTransform(m * D2D1::Matrix3x2F::Scale(sx, sy, D2D1::Point2F(ox.value_or(sx), oy.value_or(sy))));
+    m_rt->SetTransform(m * D2D1::Matrix3x2F::Scale(sx, sy, D2D1::Point2F(ox.value_or(0), oy.value_or(0))));
 }
 
 void DrawContext::clip(float x, float y, float w, float h) {
