@@ -174,34 +174,53 @@ private:
 };
 
 // =========================================================
-// LuaClassBinder - records class methods for stub generation
+// LuaClassBinder - records class methods for stub generation AND registers usertype
 // =========================================================
 class LuaClassBinder {
 public:
-    LuaClassBinder(LuaDefBuilder* def, const char* className)
-        : m_def(def), m_className(className) {
-    }
-
-    template<typename F>
-    LuaClassBinder& method(const char* name, F&& /*f*/) {
-        if (m_def) {
-            auto fd = detail::BuildFuncDef<std::decay_t<F>>(name);
-            m_def->AddClassMethod(m_className, fd);
-            m_lastMethod = name;
+    template<typename T>
+    class Builder {
+    public:
+        Builder(LuaBindContext& ctx, const char* className)
+            : m_ctx(ctx), m_def(ctx.def), m_className(className) {
+            // Usertype 초기화 (메서드는 나중에 추가)
+            m_usertype = m_ctx.lua.new_usertype<T>(className);
         }
-        return *this;
-    }
 
-    LuaClassBinder& names(std::initializer_list<const char*> paramNames) {
-        if (m_def && !m_lastMethod.empty()) {
-            std::vector<std::string> ns(paramNames.begin(), paramNames.end());
-            m_def->UpdateLastMethodNames(m_className, ns);
+        template<typename F>
+        Builder& method(const char* name, F&& f) {
+            // Sol usertype에 메서드 추가
+            m_usertype[name] = f;
+            
+            // 문서화를 위한 FuncDef 등록
+            if (m_def) {
+                auto fd = detail::BuildFuncDef<std::decay_t<F>>(name);
+                m_def->AddClassMethod(m_className, fd);
+                m_lastMethod = name;
+            }
+            return *this;
         }
-        return *this;
-    }
 
-private:
-    LuaDefBuilder* m_def;
-    std::string m_className;
-    std::string m_lastMethod;
+        Builder& names(std::initializer_list<const char*> paramNames) {
+            if (m_def && !m_lastMethod.empty()) {
+                std::vector<std::string> ns(paramNames.begin(), paramNames.end());
+                m_def->UpdateLastMethodNames(m_className, ns);
+            }
+            return *this;
+        }
+
+        Builder& desc(const char* description) {
+            if (m_def && !m_lastMethod.empty()) {
+                m_def->UpdateLastMethodDesc(m_className, description);
+            }
+            return *this;
+        }
+
+    private:
+        LuaBindContext& m_ctx;
+        LuaDefBuilder* m_def;
+        std::string m_className;
+        std::string m_lastMethod;
+        sol::usertype<T> m_usertype;
+    };
 };

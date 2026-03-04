@@ -48,6 +48,13 @@ void LuaDefBuilder::UpdateLastMethodNames(const std::string& cls, const std::vec
     }
 }
 
+void LuaDefBuilder::UpdateLastMethodDesc(const std::string& cls, const std::string& desc) {
+    ClassDef* clsDef = FindOrAddClass(cls);
+    if (clsDef->methods.empty()) return;
+    
+    clsDef->methods.back().description = desc;
+}
+
 void LuaDefBuilder::Write(const char* path) const {
     std::ofstream out(path);
     if (!out) return;

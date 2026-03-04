@@ -214,5 +214,8 @@ void GraphicEngine::Release() {
 }
 
 void GraphicEngine::BindToLua(LuaBindContext& ctx) {
-    if (m_drawContext) m_drawContext->BindGlobal(ctx);
+    if (m_drawContext) {
+        m_drawContext->BindGlobal(ctx);
+        DrawContext::BindClass(ctx);
+    }
 }

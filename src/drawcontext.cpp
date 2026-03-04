@@ -12,11 +12,23 @@ DrawContext::DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory
 {
     if (m_rt) {
         m_rt->CreateSolidColorBrush(m_color, &m_brush);
+
+        // D3D11 device 획득 (D2D RenderTarget → Device)
+        ComPtr<ID2D1Device> d2dDevice;
+        if (SUCCEEDED(m_rt->QueryInterface(IID_PPV_ARGS(&d2dDevice)))) {
+            d2dDevice->QueryInterface(IID_PPV_ARGS(&m_d3dDevice));
+        }
+        
+        if (m_d3dDevice) {
+            m_d3dDevice->GetImmediateContext(&m_d3dContext);
+        }
     }
 }
 
 DrawContext::~DrawContext() {
     m_brush.Reset();
+    m_d3dContext.Reset();
+    m_d3dDevice.Reset();
     m_rt.Reset();
 }
 
@@ -240,6 +252,27 @@ void DrawContext::color(sol::object arg1, sol::optional<float> arg2, sol::option
 void DrawContext::setStrokeWidth(float width) { m_strokeWidth = width; }
 void DrawContext::setGlobalAlpha(float alpha) { m_globalAlpha = alpha; updateBrush(); }
 
+void DrawContext::ApplyShaderToOffscreen(DrawContext* source, float dx, float dy, float dw, float dh,
+    float sx, float sy, float sw, float sh, float alpha)
+{
+    // 현재는 셰이더 로직이 복잡하여 기본 렌더링으로 대체
+    // TODO: D3D11 렌더링 파이프라인 구현 필요
+    if (!source || !source->m_rt) return;
+
+    ComPtr<ID2D1BitmapRenderTarget> bitmapRT;
+    if (SUCCEEDED(source->m_rt.As(&bitmapRT))) {
+        ComPtr<ID2D1Bitmap> bmp;
+        if (SUCCEEDED(bitmapRT->GetBitmap(&bmp))) {
+            // 셰이더가 실제로 적용되기 전까지는 기본 렌더링 사용
+            m_rt->DrawBitmap(bmp.Get(),
+                D2D1::RectF(dx, dy, dx + dw, dy + dh),
+                alpha,
+                D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                D2D1::RectF(sx, sy, sx + sw, sy + sh));
+        }
+    }
+}
+
 // --- Offscreen 생성 ---
 std::shared_ptr<DrawContext> DrawContext::createOffscreen(float w, float h) {
     // 1. 현재 DC와 호환되는 새로운 비트맵 렌더 타겟 생성
@@ -273,12 +306,20 @@ void DrawContext::draw(DrawContext* source, float x, float y,
             float sY = sy.value_or(0);
             float sW = sw.value_or(size.width - sX);
             float sH = sh.value_or(size.height - sY);
+            float dW = w.value_or(sW);
+            float dH = h.value_or(sH);
 
-            m_rt->DrawBitmap(bmp.Get(),
-                D2D1::RectF(x, y, x + w.value_or(sW), y + h.value_or(sH)),
-                alpha.value_or(source->m_globalAlpha),
-                D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
-                D2D1::RectF(sX, sY, sX + sW, sY + sH));
+            // 셰이더가 설정되어 있으면 셰이더 렌더링 적용
+            if (source->m_shaderId >= 0) {
+                ApplyShaderToOffscreen(source, x, y, dW, dH, sX, sY, sW, sH, alpha.value_or(source->m_globalAlpha));
+            } else {
+                // 기본 렌더링 (셰이더 없음)
+                m_rt->DrawBitmap(bmp.Get(),
+                    D2D1::RectF(x, y, x + dW, y + dH),
+                    alpha.value_or(source->m_globalAlpha),
+                    D2D1_BITMAP_INTERPOLATION_MODE_NEAREST_NEIGHBOR,
+                    D2D1::RectF(sX, sY, sX + sW, sY + sH));
+            }
         }
     }
 }
@@ -387,4 +428,125 @@ void DrawContext::BindGlobal(LuaBindContext& ctx) {
     })
     .names({"x", "y", "w", "h"})
     .desc("Set clipping rectangle to (x, y, w, h)");
+}
+
+void DrawContext::BindClass(LuaBindContext& ctx) {
+    LuaClassBinder::Builder<DrawContext> binder(ctx, "DrawContext");
+    
+    // --- 기본 도형 ---
+    binder.method("rect", [](DrawContext& self, float x, float y, float w, float h, sol::optional<bool> f) {
+        self.rect(x, y, w, h, f);
+    })
+    .names({"x", "y", "w", "h", "fill"})
+    .desc("Draw a rectangle at (x, y) with size (w, h). Set fill=true for filled");
+
+    binder.method("circle", [](DrawContext& self, float x, float y, float r, sol::optional<bool> f) {
+        self.circle(x, y, r, f);
+    })
+    .names({"x", "y", "r", "fill"})
+    .desc("Draw a circle at (x, y) with radius r. Set fill=true for filled");
+
+    binder.method("polyline", [](DrawContext& self, sol::table t, sol::optional<bool> c) {
+        self.polyline(t, c);
+    })
+    .names({"vertices", "closed"})
+    .desc("Draw a polyline through vertices {x1,y1, x2,y2, ...}. Set closed=true to close the path");
+
+    binder.method("polygon", [](DrawContext& self, sol::table t) {
+        self.polygon(t);
+    })
+    .names({"vertices"})
+    .desc("Draw a filled polygon with vertices {x1,y1, x2,y2, ...}");
+
+    // --- 텍스트 / 이미지 ---
+    binder.method("text", [](DrawContext& self, int fontId, std::string s, float x, float y) {
+        self.text(fontId, s, x, y);
+    })
+    .names({"fontId", "str", "x", "y"})
+    .desc("Draw text string at (x, y) using the specified font");
+
+    binder.method("image", [](DrawContext& self, int id, float dx, float dy,
+        sol::optional<float> dw, sol::optional<float> dh,
+        sol::optional<float> sx, sol::optional<float> sy,
+        sol::optional<float> sw, sol::optional<float> sh,
+        sol::optional<float> a) {
+        self.image(id, dx, dy, dw, dh, sx, sy, sw, sh, a);
+    })
+    .names({"id", "dx", "dy", "dw", "dh", "sx", "sy", "sw", "sh", "alpha"})
+    .desc("Draw image at (dx, dy) with optional size, source rect, and alpha");
+
+    // --- 오프스크린 & 드로우 ---
+    binder.method("offscreen", [](DrawContext& self, float w, float h) {
+        return self.createOffscreen(w, h);
+    })
+    .names({"w", "h"})
+    .desc("Create an offscreen canvas with size (w, h)");
+
+    binder.method("draw", [](DrawContext& self, DrawContext* src, float x, float y,
+        sol::optional<float> w, sol::optional<float> h,
+        sol::optional<float> sx, sol::optional<float> sy,
+        sol::optional<float> sw, sol::optional<float> sh,
+        sol::optional<float> a) {
+        self.draw(src, x, y, w, h, sx, sy, sw, sh, a);
+    })
+    .names({"source", "x", "y", "w", "h", "sx", "sy", "sw", "sh", "alpha"})
+    .desc("Draw an offscreen canvas at (x, y) with optional size, source rect, and alpha");
+
+    // --- 상태 관리 및 속성 ---
+    binder.method("color", [](DrawContext& self, sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4) {
+        self.color(arg1, arg2, arg3, arg4);
+    })
+    .names({"arg1", "arg2", "arg3", "arg4"})
+    .desc("Set drawing color. Use color(r,g,b,a) or color(0xRRGGBB) or color(0xRRGGBBAA)");
+
+    binder.method("lineWidth", [](DrawContext& self, float w) {
+        self.setStrokeWidth(w);
+    })
+    .names({"w"})
+    .desc("Set line width for stroke drawing");
+
+    binder.method("push", [](DrawContext& self) {
+        self.push();
+    })
+    .desc("Push current transform and clip state onto stack");
+
+    binder.method("pop", [](DrawContext& self) {
+        self.pop();
+    })
+    .desc("Pop transform and clip state from stack");
+
+    binder.method("translate", [](DrawContext& self, float x, float y) {
+        self.translate(x, y);
+    })
+    .names({"x", "y"})
+    .desc("Translate (move) the coordinate system by (x, y)");
+
+    binder.method("scale", [](DrawContext& self, float sx, float sy, sol::optional<float> ox, sol::optional<float> oy) {
+        self.scale(sx, sy, ox, oy);
+    })
+    .names({"sx", "sy", "ox", "oy"})
+    .desc("Scale the coordinate system by (sx, sy) around origin (ox, oy)");
+
+    binder.method("clip", [](DrawContext& self, float x, float y, float w, float h) {
+        self.clip(x, y, w, h);
+    })
+    .names({"x", "y", "w", "h"})
+    .desc("Set clipping rectangle to (x, y, w, h)");
+
+    // --- 셰이더 & 배치 ---
+    binder.method("setShader", [](DrawContext& self, sol::optional<int> shaderId) {
+        self.m_shaderId = shaderId.value_or(-1);
+    })
+    .names({"shaderId"})
+    .desc("Set shader effect for this offscreen canvas. Pass nil to disable shader");
+
+    binder.method("batchBegin", [](DrawContext& self) {
+        self.batchBegin();
+    })
+    .desc("Begin draw batching (calls BeginDraw on render target)");
+
+    binder.method("batchEnd", [](DrawContext& self) {
+        self.batchEnd();
+    })
+    .desc("End draw batching (calls EndDraw on render target)");
 }

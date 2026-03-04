@@ -1,6 +1,7 @@
 #pragma once
 #include <d2d1_1.h>
 #include <dwrite.h>
+#include <d3d11.h>
 #include <wrl/client.h>
 #include <vector>
 #include "includesol.h"
@@ -21,6 +22,7 @@ public:
     DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory);
     ~DrawContext();
     void BindGlobal(LuaBindContext& ctx);
+    static void BindClass(LuaBindContext& ctx);
 
     // 기본 그리기 함수
     void rect(float x, float y, float w, float h, sol::optional<bool> fill);
@@ -41,6 +43,7 @@ public:
     void color(sol::object arg1, sol::optional<float> arg2, sol::optional<float> arg3, sol::optional<float> arg4);
     void setStrokeWidth(float width);
     void setGlobalAlpha(float alpha);
+    void setShader(sol::optional<int> shaderId);
 
     void push();
     void pop();
@@ -58,13 +61,20 @@ private:
     ComPtr<ID2D1RenderTarget> m_rt;
 	ComPtr<ID2D1Factory1> m_factory;
     ComPtr<ID2D1SolidColorBrush> m_brush;
+    ComPtr<ID3D11Device> m_d3dDevice;
+    ComPtr<ID3D11DeviceContext> m_d3dContext;
 
     D2D1_COLOR_F m_color = D2D1::ColorF(1, 1, 1, 1);
     float m_strokeWidth = 1.0f;
     float m_globalAlpha = 1.0f;
     int m_clipCount = 0;
+    int m_shaderId = -1;
     std::vector<StateLayer> m_stateStack;
 
     void updateBrush();
     bool isBatching = false;
+
+    // D3D11 shader support helpers
+    void ApplyShaderToOffscreen(DrawContext* source, float dx, float dy, float dw, float dh,
+        float sx, float sy, float sw, float sh, float alpha);
 };
