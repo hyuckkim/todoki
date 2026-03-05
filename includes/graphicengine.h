@@ -23,6 +23,25 @@ public:
 
     void Resize(int width, int height);
     void BindToLua(LuaBindContext& ctx);
+    
+    ID3D11Device* GetD3DDevice() const { return m_pD3D11Device.Get(); }
+    ID3D11DeviceContext* GetD3DContext() const { return m_pD3D11Context.Get(); }
+    
+    bool RenderOffscreenWithShader(
+        ID2D1Bitmap1* sourceBitmap,
+        int shaderId,
+        ID2D1RenderTarget* targetRT,
+        float dx, float dy, float dw, float dh,
+        float sx, float sy, float sw, float sh,
+        float alpha);
+    
+    bool DrawOffscreenFallback(
+        ID2D1Bitmap1* sourceBitmap,
+        ID2D1RenderTarget* sourceRT,
+        ID2D1RenderTarget* targetRT,
+        float dx, float dy, float dw, float dh,
+        float sx, float sy, float sw, float sh,
+        float alpha);
 
 private:
     bool InitCom();

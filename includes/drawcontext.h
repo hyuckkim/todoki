@@ -7,6 +7,7 @@
 #include "includesol.h"
 
 struct LuaBindContext;
+class GraphicEngine;
 
 using Microsoft::WRL::ComPtr;
 
@@ -19,10 +20,12 @@ struct StateLayer {
 
 class DrawContext {
 public:
-    DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory);
+    DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory, GraphicEngine* engine = nullptr);
     ~DrawContext();
     void BindGlobal(LuaBindContext& ctx);
     static void BindClass(LuaBindContext& ctx);
+
+    void SetGraphicEngine(GraphicEngine* engine) { m_engine = engine; }
 
     // 기본 그리기 함수
     void rect(float x, float y, float w, float h, sol::optional<bool> fill);
@@ -62,6 +65,7 @@ private:
 	ComPtr<ID2D1Factory1> m_factory;
     ComPtr<ID2D1SolidColorBrush> m_brush;
     ComPtr<ID2D1Bitmap1> m_targetBitmap;
+    GraphicEngine* m_engine;
 
     D2D1_COLOR_F m_color = D2D1::ColorF(1, 1, 1, 1);
     float m_strokeWidth = 1.0f;
@@ -74,7 +78,6 @@ private:
     void updateBrush();
     bool isBatching = false;
 
-    // D3D11 shader support helpers
     void ApplyShaderToOffscreen(DrawContext* source, float dx, float dy, float dw, float dh,
         float sx, float sy, float sw, float sh, float alpha);
 };

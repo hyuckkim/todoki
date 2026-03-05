@@ -2,6 +2,7 @@
 add_definitions(-DUNICODE -D_UNICODE)
 add_compile_options(/source-charset:utf-8 /execution-charset:utf-8)
 
+enable_testing()
 project("world")
 
 # MSVC 핫 리로드 설정
@@ -64,6 +65,9 @@ target_include_directories(world PRIVATE
 )
 
 # lua
+set(CTEST_CUSTOM_TESTS_IGNORE
+    lua-testsuite
+)
 add_subdirectory(external/lua)
 target_link_libraries(world PRIVATE lua_static)
 target_include_directories(world PRIVATE external/lua/include)
@@ -77,3 +81,20 @@ target_include_directories(world PRIVATE external/sol2/include)
 target_include_directories(world PRIVATE
     external/json/single_include
 )
+
+
+add_executable(colorparser_test
+    tests/colorparser_test.cpp
+)
+
+set_property(TARGET colorparser_test PROPERTY CXX_STANDARD 20)
+
+target_include_directories(colorparser_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/includes"
+)
+
+target_link_libraries(colorparser_test PRIVATE
+    d2d1
+)
+
+add_test(NAME colorparser_test COMMAND colorparser_test)

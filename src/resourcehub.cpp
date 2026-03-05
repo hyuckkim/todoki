@@ -1,4 +1,5 @@
 ﻿#include "ResourceHub.h"
+#include "graphicengine.h"
 #include <Windows.h>
 #include <dwrite_3.h>
 #include <d3dcompiler.h>
@@ -152,14 +153,12 @@ ResourceHub::~ResourceHub()
 void ResourceHub::Init(ID2D1DeviceContext* dc,
     IDWriteFactory* dwrite,
     IWICImagingFactory* wic,
-    ID3D11Device* d3d,
-    ID3D11DeviceContext* d3dCtx)
+    GraphicEngine* engine)
 {
     m_dc = dc;
     m_dwrite = dwrite;
     m_wic = wic;
-    m_d3d = d3d;
-    m_d3dCtx = d3dCtx;
+    m_engine = engine;
 }
 
 void ResourceHub::Shutdown()
@@ -183,8 +182,6 @@ void ResourceHub::Shutdown()
     m_dc.Reset();
     m_dwrite.Reset();
     m_wic.Reset();
-    m_d3dCtx.Reset();
-    m_d3d.Reset();
 
     m_fileFonts.clear();
     m_memFonts.clear();
@@ -423,7 +420,13 @@ int ResourceHub::LoadSound(const std::string& path)
 }
 int ResourceHub::LoadPixelShader(const std::string& path, const std::string& entryPoint)
 {
-    if (!m_d3d) {
+    if (!m_engine) {
+        printf("[RES] shader fail(no engine): %s\n", path.c_str());
+        return -1;
+    }
+    
+    ID3D11Device* device = m_engine->GetD3DDevice();
+    if (!device) {
         printf("[RES] shader fail(no d3d): %s\n", path.c_str());
         return -1;
     }
@@ -463,7 +466,7 @@ int ResourceHub::LoadPixelShader(const std::string& path, const std::string& ent
     }
 
     ComPtr<ID3D11PixelShader> ps;
-    hr = m_d3d->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &ps);
+    hr = device->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &ps);
     if (FAILED(hr)) {
         printf("[RES] shader create fail: %s\n", path.c_str());
         return -1;
@@ -594,14 +597,4 @@ ID3D11PixelShader* ResourceHub::GetPixelShader(int id)
         return nullptr;
 
     return m_pixelShaders[id].Get();
-}
-
-ID3D11Device* ResourceHub::GetD3DDevice()
-{
-    return m_d3d.Get();
-}
-
-ID3D11DeviceContext* ResourceHub::GetD3DContext()
-{
-    return m_d3dCtx.Get();
 }

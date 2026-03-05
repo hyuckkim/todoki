@@ -13,6 +13,7 @@
 #include <memory>
 
 struct LuaBindContext;
+class GraphicEngine;
 
 using Microsoft::WRL::ComPtr;
 
@@ -56,8 +57,7 @@ public:
     void Init(ID2D1DeviceContext* dc,
         IDWriteFactory* dwrite,
         IWICImagingFactory* wic,
-        ID3D11Device* d3d,
-        ID3D11DeviceContext* d3dCtx);
+        GraphicEngine* engine);
 
     void Shutdown();
 
@@ -67,8 +67,6 @@ public:
     IDWriteTextFormat* GetFont(int id);
     SoLoud::Wav* GetSound(int id);
     ID3D11PixelShader* GetPixelShader(int id);
-    ID3D11Device* GetD3DDevice();
-    ID3D11DeviceContext* GetD3DContext();
 
 private:
     ResourceHub() = default;
@@ -90,8 +88,7 @@ private:
     ComPtr<ID2D1DeviceContext> m_dc;
     ComPtr<IDWriteFactory>     m_dwrite;
     ComPtr<IWICImagingFactory> m_wic;
-    ComPtr<ID3D11Device> m_d3d;
-    ComPtr<ID3D11DeviceContext> m_d3dCtx;
+    GraphicEngine* m_engine = nullptr;
 
     // ---- resource tables ----
     std::vector<ComPtr<ID2D1Bitmap>> m_bitmaps;
