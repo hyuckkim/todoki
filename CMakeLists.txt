@@ -76,3 +76,35 @@ target_include_directories(world PRIVATE external/sol2/include)
 target_include_directories(world PRIVATE
     external/json/single_include
 )
+
+# ----------------------------------------------------------------
+# Tests
+# ----------------------------------------------------------------
+include(FetchContent)
+FetchContent_Declare(
+    googletest
+    URL https://github.com/google/googletest/archive/refs/tags/v1.14.0.zip
+)
+# Windows: prevent overriding the parent project's compiler/linker settings
+set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(googletest)
+
+enable_testing()
+
+add_executable(luadef_test
+    tests/luadef_test.cpp
+    src/luadef.cpp
+)
+
+if (CMAKE_VERSION VERSION_GREATER_EQUAL 3.12)
+  set_property(TARGET luadef_test PROPERTY CXX_STANDARD 20)
+endif()
+
+target_include_directories(luadef_test PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/includes"
+)
+
+target_link_libraries(luadef_test PRIVATE GTest::gtest_main)
+
+include(GoogleTest)
+gtest_discover_tests(luadef_test)
