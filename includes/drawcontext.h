@@ -61,6 +61,7 @@ private:
     ComPtr<ID2D1RenderTarget> m_rt;
 	ComPtr<ID2D1Factory1> m_factory;
     ComPtr<ID2D1SolidColorBrush> m_brush;
+    ComPtr<ID2D1Bitmap1> m_targetBitmap;
 
     D2D1_COLOR_F m_color = D2D1::ColorF(1, 1, 1, 1);
     float m_strokeWidth = 1.0f;
@@ -69,6 +70,7 @@ private:
     int m_shaderId = -1;
     std::vector<StateLayer> m_stateStack;
 
+    void EnsureDrawSession();
     void updateBrush();
     bool isBatching = false;
 

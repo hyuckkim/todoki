@@ -42,6 +42,7 @@ private:
 
     // Direct3D / DXGI / DComp
     ComPtr<ID3D11Device>    m_pD3D11Device;
+    ComPtr<ID3D11DeviceContext> m_pD3D11Context;
     ComPtr<IDXGISwapChain1> m_pSwapChain;
     ComPtr<IDCompositionDevice> m_pDCompDevice;
     ComPtr<IDCompositionTarget> m_pDCompTarget;

@@ -36,6 +36,7 @@ include_directories(${CMAKE_SOURCE_DIR}/include)
 
 target_link_libraries(world PRIVATE
     d3d11
+    d3dcompiler
     dxgi
     d2d1
     dwrite

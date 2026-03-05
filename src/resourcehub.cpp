@@ -1,6 +1,7 @@
 ﻿#include "ResourceHub.h"
 #include <Windows.h>
 #include <dwrite_3.h>
+#include <d3dcompiler.h>
 #include "util.h"
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -150,11 +151,15 @@ ResourceHub::~ResourceHub()
 
 void ResourceHub::Init(ID2D1DeviceContext* dc,
     IDWriteFactory* dwrite,
-    IWICImagingFactory* wic)
+    IWICImagingFactory* wic,
+    ID3D11Device* d3d,
+    ID3D11DeviceContext* d3dCtx)
 {
     m_dc = dc;
     m_dwrite = dwrite;
     m_wic = wic;
+    m_d3d = d3d;
+    m_d3dCtx = d3dCtx;
 }
 
 void ResourceHub::Shutdown()
@@ -170,12 +175,16 @@ void ResourceHub::Shutdown()
     m_bitmaps.clear();
     m_fonts.clear();
     m_sounds.clear();
+    m_pixelShaders.clear();
     m_pathCache.clear();
     m_soundCache.clear();
+    m_shaderCache.clear();
 
     m_dc.Reset();
     m_dwrite.Reset();
     m_wic.Reset();
+    m_d3dCtx.Reset();
+    m_d3d.Reset();
 
     m_fileFonts.clear();
     m_memFonts.clear();
@@ -412,6 +421,60 @@ int ResourceHub::LoadSound(const std::string& path)
     printf("[RES] sound: %s\n", path.c_str());
     return id;
 }
+int ResourceHub::LoadPixelShader(const std::string& path, const std::string& entryPoint)
+{
+    if (!m_d3d) {
+        printf("[RES] shader fail(no d3d): %s\n", path.c_str());
+        return -1;
+    }
+
+    const std::string key = path + "|" + entryPoint;
+    auto it = m_shaderCache.find(key);
+    if (it != m_shaderCache.end())
+        return it->second;
+
+    std::wstring wPath = to_wstring(path);
+    UINT compileFlags = D3DCOMPILE_ENABLE_STRICTNESS;
+#ifdef _DEBUG
+    compileFlags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+
+    ComPtr<ID3DBlob> psBlob;
+    ComPtr<ID3DBlob> errBlob;
+    HRESULT hr = D3DCompileFromFile(
+        wPath.c_str(),
+        nullptr,
+        D3D_COMPILE_STANDARD_FILE_INCLUDE,
+        entryPoint.c_str(),
+        "ps_5_0",
+        compileFlags,
+        0,
+        &psBlob,
+        &errBlob);
+
+    if (FAILED(hr) || !psBlob) {
+        if (errBlob) {
+            printf("[RES] shader compile fail: %s (%s)\n", path.c_str(), (const char*)errBlob->GetBufferPointer());
+        }
+        else {
+            printf("[RES] shader compile fail: %s\n", path.c_str());
+        }
+        return -1;
+    }
+
+    ComPtr<ID3D11PixelShader> ps;
+    hr = m_d3d->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &ps);
+    if (FAILED(hr)) {
+        printf("[RES] shader create fail: %s\n", path.c_str());
+        return -1;
+    }
+
+    int id = (int)m_pixelShaders.size();
+    m_pixelShaders.push_back(ps);
+    m_shaderCache[key] = id;
+    printf("[RES] shader: %s (entry=%s)\n", path.c_str(), entryPoint.c_str());
+    return id;
+}
 void ResourceHub::BindLua(LuaBindContext& ctx)
 {
     LuaNamespaceBinder binder(ctx);
@@ -432,6 +495,13 @@ void ResourceHub::BindLua(LuaBindContext& ctx)
     .names({"path"})
     .returns("integer")
     .desc("Load an image from file and return its resource ID");
+
+    binder.func("shader", [this](std::string path, sol::optional<std::string> entry) {
+        return LoadPixelShader(path, entry.value_or("main"));
+    })
+    .names({"path", "entry"})
+    .returns("integer")
+    .desc("Load HLSL pixel shader from file and return its shader ID");
 
     binder.func("font", [this](std::string name, float size, sol::optional<int> weight) {
         return LoadSystemFont(name, size, weight.value_or(400));
@@ -517,4 +587,21 @@ SoLoud::Wav* ResourceHub::GetSound(int id)
         return nullptr;
 
     return m_sounds[id].get();
+}
+ID3D11PixelShader* ResourceHub::GetPixelShader(int id)
+{
+    if (id < 0 || id >= (int)m_pixelShaders.size())
+        return nullptr;
+
+    return m_pixelShaders[id].Get();
+}
+
+ID3D11Device* ResourceHub::GetD3DDevice()
+{
+    return m_d3d.Get();
+}
+
+ID3D11DeviceContext* ResourceHub::GetD3DContext()
+{
+    return m_d3dCtx.Get();
 }

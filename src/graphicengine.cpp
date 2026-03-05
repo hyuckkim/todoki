@@ -23,7 +23,7 @@ bool GraphicEngine::Init(HWND hwnd, WindowConfig cfg) {
 
     m_drawContext.reset(new DrawContext(m_pD2DDC.Get(), m_pD2DFactory.Get()));
     ResourceHub::Instance().Init(
-		m_pD2DDC.Get(), m_pDWriteFactory.Get(), m_pWICFactory.Get());
+		m_pD2DDC.Get(), m_pDWriteFactory.Get(), m_pWICFactory.Get(), m_pD3D11Device.Get(), m_pD3D11Context.Get());
     return true;
 }
 
@@ -53,6 +53,7 @@ void GraphicEngine::RecreateDevice() {
     m_pD2DDC.Reset();
     m_pD2DFactory.Reset();
     m_pSwapChain.Reset();
+    m_pD3D11Context.Reset();
     m_pD3D11Device.Reset();
     InitD2D();
 }
@@ -91,7 +92,7 @@ bool GraphicEngine::InitD2D() {
     flags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
 
-    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0, D3D11_SDK_VERSION, &m_pD3D11Device, nullptr, nullptr);
+    hr = D3D11CreateDevice(nullptr, D3D_DRIVER_TYPE_HARDWARE, nullptr, flags, nullptr, 0, D3D11_SDK_VERSION, &m_pD3D11Device, nullptr, &m_pD3D11Context);
     if (FAILED(hr)) { printf("InitD2D: D3D11CreateDevice failed: 0x%08X\n", hr); return false; }
 
     ComPtr<IDXGIDevice> dxgiDevice;
@@ -202,6 +203,7 @@ void GraphicEngine::Release() {
     m_pDCompDevice.Reset();
     m_pSwapChain.Reset();
     m_pD2DDC.Reset();
+    m_pD3D11Context.Reset();
     m_pD3D11Device.Reset();
     m_pWICFactory.Reset();
     m_pDWriteFactory.Reset();
