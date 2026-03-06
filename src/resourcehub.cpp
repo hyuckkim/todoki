@@ -546,7 +546,7 @@ void ResourceHub::BindLua(LuaBindContext& ctx)
         }
     })
     .names({"path"})
-    .returns("any")
+    .returns("table?")
     .desc("Load a JSON file and convert it to a Lua table");
 
     binder.func("savejson", [](std::string path, sol::object table) -> bool {

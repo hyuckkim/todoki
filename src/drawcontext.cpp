@@ -19,7 +19,7 @@ DrawContext::DrawContext(ID2D1RenderTarget* renderTarget, ID2D1Factory1* factory
 
         ComPtr<ID2D1DeviceContext> dc;
         if (SUCCEEDED(m_rt.As(&dc)) && dc) {
-            ComPtr<ID2D1Image> target;
+        ComPtr<ID2D1Image> target;
             dc->GetTarget(&target);
             if (target) target.As(&m_targetBitmap);
         }
@@ -120,6 +120,34 @@ void DrawContext::text(int fontId, std::string str, float x, float y) {
         pFormat,
         layoutRect,
         m_brush.Get());
+}
+
+std::pair<float,float> DrawContext::measureText(int fontId, std::string str) {
+    IDWriteTextFormat* pFormat = ResourceHub::Instance().GetFont(fontId);
+    if (!pFormat) return {0.0f, 0.0f};
+
+    std::wstring wstr = ToWString(str);
+
+    ComPtr<IDWriteFactory> dwFactory;
+    if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(dwFactory.GetAddressOf()))) || !dwFactory) {
+        return {0.0f, 0.0f};
+    }
+
+    ComPtr<IDWriteTextLayout> layout;
+    HRESULT hr = dwFactory->CreateTextLayout(
+        wstr.c_str(),
+        static_cast<UINT32>(wstr.length()),
+        pFormat,
+        10000.0f, 10000.0f,
+        &layout);
+
+    if (FAILED(hr) || !layout) return {0.0f, 0.0f};
+
+    DWRITE_TEXT_METRICS metrics;
+    hr = layout->GetMetrics(&metrics);
+    if (FAILED(hr)) return {0.0f, 0.0f};
+
+    return { metrics.width, metrics.height };
 }
 
 // --- 이미지/비트맵 그리기 ---
@@ -439,7 +467,7 @@ void DrawContext::BindGlobal(LuaBindContext& ctx) {
         return createOffscreen(w, h); 
     })
     .names({"w", "h"})
-    .returns("any")
+    .returns("DrawContext?")
     .desc("Create an offscreen canvas with size (w, h)");
 
     binder.func("draw", [this](DrawContext* src, float x, float y,
@@ -451,6 +479,14 @@ void DrawContext::BindGlobal(LuaBindContext& ctx) {
     })
     .names({"source", "x", "y", "w", "h", "sx", "sy", "sw", "sh", "alpha"})
     .desc("Draw an offscreen canvas at (x, y) with optional size, source rect, and alpha");
+
+    binder.func("measureText", [this, &ctx](int fontId, std::string s) {
+        auto sz = measureText(fontId, s);
+        return std::make_tuple(sz.first, sz.second);
+    })
+    .names({"fontId", "str"})
+    .returns("number, number")
+    .desc("Measure text size. Returns width, height");
 
     // --- 상태 관리 및 속성 ---
 
@@ -552,6 +588,7 @@ void DrawContext::BindClass(LuaBindContext& ctx) {
         return self.createOffscreen(w, h);
     })
     .names({"w", "h"})
+    .returns("DrawContext?")
     .desc("Create an offscreen canvas with size (w, h)");
 
     binder.method("draw", [](DrawContext& self, DrawContext* src, float x, float y,
@@ -563,6 +600,13 @@ void DrawContext::BindClass(LuaBindContext& ctx) {
     })
     .names({"source", "x", "y", "w", "h", "sx", "sy", "sw", "sh", "alpha"})
     .desc("Draw an offscreen canvas at (x, y) with optional size, source rect, and alpha");
+
+    binder.method("measureText", [&ctx](DrawContext& self, int fontId, std::string s) {
+        auto sz = self.measureText(fontId, s);
+        return std::make_tuple(sz.first, sz.second);
+    })
+    .names({"fontId", "str"})
+    .desc("Measure text size. Returns width, height");
 
     // --- 상태 관리 및 속성 ---
 

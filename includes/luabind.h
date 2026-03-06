@@ -265,6 +265,12 @@ public:
             }
             return *this;
         }
+        Builder& returns(const char* retType) {
+            if (m_def && !m_lastMethod.empty()) {
+                m_def->UpdateLastMethodReturn(m_className, retType);
+            }
+            return *this;
+		}
 
         Builder& desc(const char* description) {
             if (m_def && !m_lastMethod.empty()) {

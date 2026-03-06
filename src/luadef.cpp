@@ -54,6 +54,13 @@ void LuaDefBuilder::UpdateLastMethodNames(const std::string& cls, const std::vec
     }
 }
 
+void LuaDefBuilder::UpdateLastMethodReturn(const std::string& cls, const std::string& retType) {
+    ClassDef* clsDef = FindOrAddClass(cls);
+    if (clsDef->methods.empty()) return;
+    
+    clsDef->methods.back().returnType = retType;
+}
+
 void LuaDefBuilder::UpdateLastMethodDesc(const std::string& cls, const std::string& desc) {
     ClassDef* clsDef = FindOrAddClass(cls);
     if (clsDef->methods.empty()) return;

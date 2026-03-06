@@ -38,6 +38,7 @@ public:
 
     void AddClassMethod(const std::string& cls, const FuncDef& fd);
     void UpdateLastMethodNames(const std::string& cls, const std::vector<std::string>& names);
+	void UpdateLastMethodReturn(const std::string& cls, const std::string& retType);
     void UpdateLastMethodDesc(const std::string& cls, const std::string& desc);
 
     void Write(const char* path = "_globalDef.lua") const;

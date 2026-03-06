@@ -33,6 +33,7 @@ public:
     void polyline(sol::table vertices, sol::optional<bool> closed);
     void polygon(sol::table vertices);
     void text(int fontId, std::string str, float x, float y);
+    std::pair<float,float> measureText(int fontId, std::string str);
     void image(int id, float dx, float dy, sol::optional<float> dw, sol::optional<float> dh,
         sol::optional<float> sx, sol::optional<float> sy,
         sol::optional<float> sw, sol::optional<float> sh, sol::optional<float> alpha);
