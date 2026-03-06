@@ -99,6 +99,22 @@ namespace detail {
         }
     };
 
+    // ParamCollector that can start from an arbitrary index (Start)
+    template<typename Tuple, size_t Start, size_t N = 0>
+    struct ParamCollectorFrom {
+        static void Collect(std::vector<std::string>& types) {
+            if constexpr (N < std::tuple_size_v<Tuple>) {
+                using RawT = std::decay_t<std::tuple_element_t<N, Tuple>>;
+                if constexpr (N >= Start) {
+                    if constexpr (!IsInjectedArg<RawT>::value) {
+                        types.push_back(LuaTypeStr<RawT>::get());
+                    }
+                }
+                ParamCollectorFrom<Tuple, Start, N + 1>::Collect(types);
+            }
+        }
+    };
+
     template<typename F>
     FuncDef BuildFuncDef(const char* funcName) {
         using DecayedF = std::decay_t<F>;
@@ -108,6 +124,47 @@ namespace detail {
 
         std::vector<std::string> paramTypes;
         ParamCollector<ArgsTuple, 0>::Collect(paramTypes);
+
+        FuncDef fd;
+        fd.name = funcName;
+        fd.returnType = LuaTypeStr<RetType>::get();
+        for (size_t i = 0; i < paramTypes.size(); i++) {
+            ParamDef p;
+            p.name = "p" + std::to_string(i + 1);
+            p.luaType = paramTypes[i];
+            fd.params.push_back(p);
+        }
+        return fd;
+    }
+
+    // Build function definition for class methods: skip the first argument when
+    // it represents the instance (e.g., T, T&, T*). This prevents the
+    // automatically-generated documentation from showing the implicit `self`
+    // parameter as a user-visible argument.
+    template<typename Class, typename F>
+    FuncDef BuildMethodDef(const char* funcName) {
+        using DecayedF = std::decay_t<F>;
+        using Traits = FunctionTraits<DecayedF>;
+        using ArgsTuple = typename Traits::ArgsTuple;
+        using RetType = typename Traits::ReturnType;
+
+        std::vector<std::string> paramTypes;
+
+        // Decide at compile-time whether to skip the first parameter (instance)
+        if constexpr (std::tuple_size_v<ArgsTuple> == 0) {
+            ParamCollectorFrom<ArgsTuple, 0>::Collect(paramTypes);
+        }
+        else {
+            using FirstRaw = std::decay_t<std::tuple_element_t<0, ArgsTuple>>;
+            if constexpr (std::is_same_v<FirstRaw, Class> ||
+                          (std::is_pointer_v<FirstRaw> && std::is_same_v<std::remove_pointer_t<FirstRaw>, Class>)) {
+                // First arg is the instance type -> skip it
+                ParamCollectorFrom<ArgsTuple, 1>::Collect(paramTypes);
+            }
+            else {
+                ParamCollectorFrom<ArgsTuple, 0>::Collect(paramTypes);
+            }
+        }
 
         FuncDef fd;
         fd.name = funcName;
@@ -194,7 +251,7 @@ public:
             
             // 문서화를 위한 FuncDef 등록
             if (m_def) {
-                auto fd = detail::BuildFuncDef<std::decay_t<F>>(name);
+                auto fd = detail::BuildMethodDef<T, std::decay_t<F>>(name);
                 m_def->AddClassMethod(m_className, fd);
                 m_lastMethod = name;
             }
