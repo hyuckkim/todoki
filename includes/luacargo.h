@@ -18,7 +18,7 @@ public:
 
     // 명시적으로 C++->Lua 콜백 시그니처를 등록
     template<typename Ret = void, typename... Args>
-    void RegisterLuaCallable(const char* funcName, std::initializer_list<const char*> paramNames = {}) {
+    void RegisterLuaCallable(const char* funcName, std::initializer_list<const char*> paramNames = {}, const char* description = nullptr) {
         FuncDef fd;
         fd.name = funcName;
         fd.returnType = LuaTypeStr<Ret>::get();
@@ -30,7 +30,7 @@ public:
             std::string pname = (nameIt != paramNames.end()) ? *nameIt++ : "p" + std::to_string(idx++);
             fd.params.push_back(ParamDef{pname, LuaTypeStr<std::decay_t<Args>>::get()});
         }(), ...);
-
+        if (description) fd.description = description;
         defBuilder.AddLuaCallableFunc(fd);
     }
 

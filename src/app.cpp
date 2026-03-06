@@ -73,19 +73,77 @@ void App::SetupBindings() {
 #undef BIND
 
     // C++ -> Lua 콜백 시그니처 명시적 등록
-    m_lua.RegisterLuaCallable<void, uintptr_t, int, int>("OnMouseMove", {"id", "dx", "dy"});
-    m_lua.RegisterLuaCallable<void, int, uintptr_t>("OnMouseDown", {"button", "id"});
-    m_lua.RegisterLuaCallable<void, int, uintptr_t>("OnMouseUp", {"button", "id"});
-    m_lua.RegisterLuaCallable<void, int, uintptr_t, int, int>("OnMouseWheel", {"wheelDelta", "id", "dx", "dy"});
-    m_lua.RegisterLuaCallable<void, int>("OnKeyDown", {"key"});
-    m_lua.RegisterLuaCallable<void, int>("OnKeyUp", {"key"});
-    m_lua.RegisterLuaCallable<void>("OnInactive");
-    m_lua.RegisterLuaCallable<void>("OnActive");
-    m_lua.RegisterLuaCallable<bool, double, double>("CheckHit", {"x", "y"});
-    m_lua.RegisterLuaCallable<void>("Init");
-    m_lua.RegisterLuaCallable<void, double>("Update", {"dtMs"});
-    m_lua.RegisterLuaCallable<void>("Draw");
+    // Called when the mouse moves. id: device handle, dx/dy: movement delta.
+    m_lua.RegisterLuaCallable<void, uintptr_t, int, int>(
+        "OnMouseMove", {"id", "dx", "dy"},
+        "Called when the mouse moves. id: device handle, dx/dy: movement delta."
+    );
 
+    // Called when a mouse button is pressed. button: 0=left, 1=right, id: device handle.
+    m_lua.RegisterLuaCallable<void, int, uintptr_t>(
+        "OnMouseDown", {"button", "id"},
+        "Called when a mouse button is pressed. button: 0=left, 1=right, id: device handle."
+    );
+
+    // Called when a mouse button is released. button: 0=left, 1=right, id: device handle.
+    m_lua.RegisterLuaCallable<void, int, uintptr_t>(
+        "OnMouseUp", {"button", "id"},
+        "Called when a mouse button is released. button: 0=left, 1=right, id: device handle."
+    );
+
+    // Called when the mouse wheel is scrolled. wheelDelta: amount, id: device handle, dx/dy: movement delta.
+    m_lua.RegisterLuaCallable<void, int, uintptr_t, int, int>(
+        "OnMouseWheel", {"wheelDelta", "id", "dx", "dy"},
+        "Called when the mouse wheel is scrolled. wheelDelta: amount, id: device handle, dx/dy: movement delta."
+    );
+
+    // Called when a key is pressed. key: virtual key code.
+    m_lua.RegisterLuaCallable<void, int>(
+        "OnKeyDown", {"key"},
+        "Called when a key is pressed. key: virtual key code."
+    );
+
+    // Called when a key is released. key: virtual key code.
+    m_lua.RegisterLuaCallable<void, int>(
+        "OnKeyUp", {"key"},
+        "Called when a key is released. key: virtual key code."
+    );
+
+    // Called when the window becomes inactive (loses focus).
+    m_lua.RegisterLuaCallable<void>(
+        "OnInactive", {},
+        "Called when the window becomes inactive (loses focus)."
+    );
+
+    // Called when the window becomes active (gains focus).
+    m_lua.RegisterLuaCallable<void>(
+        "OnActive", {},
+        "Called when the window becomes active (gains focus)."
+    );
+
+    // Used for per-pixel hit testing. Returns true if (x, y) is clickable, false for transparent (mouse passthrough).
+    m_lua.RegisterLuaCallable<bool, double, double>(
+        "CheckHit", {"x", "y"},
+        "Used for per-pixel hit testing. Returns true if (x, y) is clickable, false for transparent (mouse passthrough)."
+    );
+
+    // Called once at Lua startup for initialization.
+    m_lua.RegisterLuaCallable<void>(
+        "Init", {},
+        "Called once at Lua startup for initialization."
+    );
+
+    // Called every frame to update game logic. dtMs: elapsed time in milliseconds.
+    m_lua.RegisterLuaCallable<void, double>(
+        "Update", {"dtMs"},
+        "Called every frame to update game logic. dtMs: elapsed time in milliseconds."
+    );
+
+    // Called every frame to render the scene.
+    m_lua.RegisterLuaCallable<void>(
+        "Draw", {},
+        "Called every frame to render the scene."
+    );
 }
 
 void App::SetupCallbacks() {
