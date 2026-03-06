@@ -71,6 +71,21 @@ void App::SetupBindings() {
     };
 
 #undef BIND
+
+    // C++ -> Lua 콜백 시그니처 명시적 등록
+    m_lua.RegisterLuaCallable<void, uintptr_t, int, int>("OnMouseMove", {"id", "dx", "dy"});
+    m_lua.RegisterLuaCallable<void, int, uintptr_t>("OnMouseDown", {"button", "id"});
+    m_lua.RegisterLuaCallable<void, int, uintptr_t>("OnMouseUp", {"button", "id"});
+    m_lua.RegisterLuaCallable<void, int, uintptr_t, int, int>("OnMouseWheel", {"wheelDelta", "id", "dx", "dy"});
+    m_lua.RegisterLuaCallable<void, int>("OnKeyDown", {"key"});
+    m_lua.RegisterLuaCallable<void, int>("OnKeyUp", {"key"});
+    m_lua.RegisterLuaCallable<void>("OnInactive");
+    m_lua.RegisterLuaCallable<void>("OnActive");
+    m_lua.RegisterLuaCallable<bool, double, double>("CheckHit", {"x", "y"});
+    m_lua.RegisterLuaCallable<void>("Init");
+    m_lua.RegisterLuaCallable<void, double>("Update", {"dtMs"});
+    m_lua.RegisterLuaCallable<void>("Draw");
+
 }
 
 void App::SetupCallbacks() {

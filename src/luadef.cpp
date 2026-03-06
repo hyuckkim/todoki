@@ -2,6 +2,12 @@
 #include <fstream>
 #include <algorithm>
 
+#include <sstream>
+
+void LuaDefBuilder::AddLuaCallableFunc(const FuncDef& fd) {
+    m_luaCallables.push_back(LuaCallableDef{fd});
+}
+
 void LuaDefBuilder::AddNamespaceFunc(const std::string& ns, const FuncDef& fd) {
     NamespaceDef* nsDef = FindOrAddNamespace(ns);
     nsDef->funcs.push_back(fd);
@@ -59,6 +65,8 @@ void LuaDefBuilder::Write(const char* path) const {
     std::ofstream out(path);
     if (!out) return;
 
+    out << "---@meta\n\n";
+    out << "-- THIS FILE IS AUTO-GENERATED. DO NOT EDIT MANUALLY.\n";
     out << "---@meta\n\n";
 
     // Write namespaces
@@ -123,6 +131,30 @@ void LuaDefBuilder::Write(const char* path) const {
         }
     }
 
+    // Write C++ -> Lua callable functions
+    if (!m_luaCallables.empty()) {
+        out << "---@section LuaCallables\n";
+        out << "-- The following functions are called from C++ to Lua\n\n";
+        for (const auto& callable : m_luaCallables) {
+            const auto& func = callable.func;
+            if (!func.description.empty()) {
+                out << "--- " << func.description << "\n";
+            }
+            for (const auto& param : func.params) {
+                out << "---@param " << param.name << " " << param.luaType << "\n";
+            }
+            if (!func.returnType.empty()) {
+                out << "---@return " << func.returnType << "\n";
+            }
+            out << "function " << func.name << "(";
+            for (size_t i = 0; i < func.params.size(); i++) {
+                if (i > 0) out << ", "; 
+                out << func.params[i].name;
+            }
+            out << ") end\n\n";
+        }
+        out << "---@endsection\n\n";
+    }
     out.close();
 }
 

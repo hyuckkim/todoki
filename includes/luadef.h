@@ -24,6 +24,11 @@ struct ClassDef {
     std::vector<FuncDef> methods;
 };
 
+// C++ -> Lua callable 함수 목록용
+struct LuaCallableDef {
+    FuncDef func;
+};
+
 class LuaDefBuilder {
 public:
     void AddNamespaceFunc(const std::string& ns, const FuncDef& fd);
@@ -37,9 +42,15 @@ public:
 
     void Write(const char* path = "_globalDef.lua") const;
 
+    // C++ -> Lua callable 함수 기록
+    void AddLuaCallableFunc(const FuncDef& fd);
+
 private:
     std::vector<NamespaceDef> m_namespaces;
     std::vector<ClassDef> m_classes;
+
+    // C++ -> Lua callable 함수 목록
+    std::vector<LuaCallableDef> m_luaCallables;
 
     NamespaceDef* FindOrAddNamespace(const std::string& ns);
     ClassDef* FindOrAddClass(const std::string& cls);
